@@ -247,18 +247,12 @@ export const Navbar = ({ onOpenNotifications, onOpenQuickAction, onOpenGlobalSea
                   </div>
                 </div>
 
-                {/* Account Details & Role Scope */}
+                {/* Account Details */}
                 <div className="px-4 py-2.5 text-xs text-slate-600 space-y-1.5 border-b border-slate-100">
                   <div className="flex items-center justify-between">
                     <span className="text-slate-400">Department:</span>
                     <span className="font-semibold text-slate-700 truncate max-w-[130px]">
                       {currentUser?.department || 'Administration'}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Access Scope:</span>
-                    <span className="font-semibold text-emerald-600">
-                      {rolePermissions.allowedTabs.length} Modules Active
                     </span>
                   </div>
                 </div>

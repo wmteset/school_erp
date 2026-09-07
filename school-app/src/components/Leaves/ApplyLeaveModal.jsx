@@ -1,19 +1,33 @@
-import React, { useState } from 'react';
-import { X, Palmtree, Calendar, User, FileText, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Palmtree, Calendar, User, FileText, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { useSchool } from '../../context/SchoolContext';
 
 export const ApplyLeaveModal = ({ isOpen, onClose }) => {
-  const { staff, applyLeaveRequest } = useSchool();
+  const { staff, applyLeaveRequest, currentRole, currentUser } = useSchool();
   const todayStr = new Date().toISOString().split('T')[0];
 
+  const currentTeacherStaff = staff.find(s =>
+    s.id === currentUser?.id ||
+    (s.email && currentUser?.email && s.email.toLowerCase() === currentUser.email.toLowerCase()) ||
+    (currentUser?.name && `${s.firstName} ${s.lastName}`.toLowerCase() === currentUser.name.toLowerCase())
+  ) || staff[0];
+
+  const isTeacher = currentRole === 'teacher';
+
   const [formData, setFormData] = useState({
-    staffId: staff[0]?.id || '',
-    leaveType: 'Casual Leave',
+    staffId: isTeacher ? (currentTeacherStaff?.id || '') : (staff[0]?.id || ''),
+    leaveType: 'Casual Leave (CL)',
     startDate: todayStr,
     endDate: todayStr,
     reason: '',
     substituteTeacher: 'Internal arrangement / Substitute'
   });
+
+  useEffect(() => {
+    if (isTeacher && currentTeacherStaff) {
+      setFormData(prev => ({ ...prev, staffId: currentTeacherStaff.id }));
+    }
+  }, [isTeacher, currentTeacherStaff]);
 
   if (!isOpen) return null;
 
@@ -38,6 +52,7 @@ export const ApplyLeaveModal = ({ isOpen, onClose }) => {
 
     applyLeaveRequest({
       ...formData,
+      staffId: isTeacher ? (currentTeacherStaff?.id || formData.staffId) : formData.staffId,
       daysCount
     });
 
@@ -66,13 +81,17 @@ export const ApplyLeaveModal = ({ isOpen, onClose }) => {
               <Palmtree className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-bold text-slate-800 text-lg">Staff Leave Application</h3>
-              <p className="text-xs text-slate-500">Submit request for administrative review & quota adjustment</p>
+              <h3 className="font-bold text-slate-800 text-lg">
+                {isTeacher ? 'Apply for Personal Leave' : 'Staff Leave Application'}
+              </h3>
+              <p className="text-xs text-slate-500">
+                {isTeacher ? 'Submit your leave request for administrative review' : 'Submit request for administrative review & quota adjustment'}
+              </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200 transition-colors"
+            className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -84,19 +103,38 @@ export const ApplyLeaveModal = ({ isOpen, onClose }) => {
           {/* Staff Selector */}
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
-              Select Faculty / Staff Member *
+              Faculty / Staff Member *
             </label>
-            <select
-              value={formData.staffId}
-              onChange={(e) => setFormData(prev => ({ ...prev, staffId: e.target.value }))}
-              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white font-medium"
-            >
-              {staff.map(s => (
-                <option key={s.id} value={s.id}>
-                  {s.firstName} {s.lastName} ({s.role} - {s.department})
-                </option>
-              ))}
-            </select>
+            {isTeacher ? (
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <User className="w-4 h-4 text-indigo-600" />
+                  <div>
+                    <span className="text-xs font-bold text-slate-800">
+                      {currentTeacherStaff ? `${currentTeacherStaff.firstName} ${currentTeacherStaff.lastName}` : (currentUser?.name || 'Current Faculty Member')}
+                    </span>
+                    <span className="text-[11px] text-slate-500 ml-1.5 font-mono">
+                      ({currentTeacherStaff?.id || currentUser?.id || 'Self'})
+                    </span>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-full">
+                  Self Request
+                </span>
+              </div>
+            ) : (
+              <select
+                value={formData.staffId}
+                onChange={(e) => setFormData(prev => ({ ...prev, staffId: e.target.value }))}
+                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white font-medium"
+              >
+                {staff.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.firstName} {s.lastName} ({s.role} - {s.department})
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           {/* Leave Type */}
@@ -184,14 +222,14 @@ export const ApplyLeaveModal = ({ isOpen, onClose }) => {
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl text-xs font-semibold transition-colors"
+              className="px-4 py-2 border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
             >
               Cancel
             </button>
 
             <button
               type="submit"
-              className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-100 transition-all"
+              className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-100 transition-all cursor-pointer"
             >
               Submit Application
             </button>

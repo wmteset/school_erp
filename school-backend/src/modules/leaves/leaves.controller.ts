@@ -13,15 +13,15 @@ export class LeavesController {
   constructor(private readonly leavesService: LeavesService) {}
 
   @Get()
-  @Roles(UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.ACCOUNTANT)
-  @ApiOperation({ summary: 'Get all faculty leave requests with status filter' })
+  @Roles(UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.ACCOUNTANT, UserRole.TEACHER)
+  @ApiOperation({ summary: 'Get faculty leave requests with status filter' })
   @ApiQuery({ name: 'status', enum: ['All', 'Pending', 'Approved', 'Rejected'], required: false })
   async findAll(@Query('status') status?: string) {
     return this.leavesService.findAll(status);
   }
 
   @Get(':id')
-  @Roles(UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.ACCOUNTANT)
+  @Roles(UserRole.ADMIN, UserRole.PRINCIPAL, UserRole.ACCOUNTANT, UserRole.TEACHER)
   @ApiOperation({ summary: 'Get leave application details by ID' })
   async findOne(@Param('id') id: string) {
     return this.leavesService.findOne(id);

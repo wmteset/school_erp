@@ -35,10 +35,18 @@ export const AttendanceView = () => {
     bulkMarkStudents,
     bulkMarkStaff,
     leaveRequests,
+    currentRole,
     permissions
   } = useSchool();
 
   const [activeMode, setActiveMode] = useState('students'); // 'students' | 'staff'
+
+  // If teacher, force mode to students
+  useEffect(() => {
+    if (currentRole === 'teacher' && activeMode !== 'students') {
+      setActiveMode('students');
+    }
+  }, [currentRole, activeMode]);
   const [selectedGrade, setSelectedGrade] = useState('All');
   const [selectedSection, setSelectedSection] = useState('All');
   const [selectedDept, setSelectedDept] = useState('All');
@@ -237,7 +245,7 @@ export const AttendanceView = () => {
 
         {/* Mode Switcher & Export */}
         <div className="flex flex-wrap items-center gap-3">
-          {/* Student vs Staff Toggle */}
+          {/* Student vs Staff Toggle (Staff toggle hidden for Teacher role) */}
           <div className="flex p-1 bg-slate-200/80 rounded-xl">
             <button
               onClick={() => setActiveMode('students')}
@@ -251,26 +259,30 @@ export const AttendanceView = () => {
               <span>Students ({students.length})</span>
             </button>
 
-            <button
-              onClick={() => setActiveMode('staff')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                activeMode === 'staff'
-                  ? 'bg-white text-emerald-700 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Users className="w-4 h-4" />
-              <span>Staff & Faculty ({staff.length})</span>
-            </button>
+            {currentRole !== 'teacher' && (
+              <button
+                onClick={() => setActiveMode('staff')}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  activeMode === 'staff'
+                    ? 'bg-white text-emerald-700 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Users className="w-4 h-4" />
+                <span>Staff & Faculty ({staff.length})</span>
+              </button>
+            )}
           </div>
 
-          <button
-            onClick={handleExportCSV}
-            className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-2xs transition-all cursor-pointer"
-          >
-            <Download className="w-3.5 h-3.5 text-slate-500" />
-            <span>Export CSV</span>
-          </button>
+          {currentRole !== 'teacher' && (
+            <button
+              onClick={handleExportCSV}
+              className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-2xs transition-all cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5 text-slate-500" />
+              <span>Export CSV</span>
+            </button>
+          )}
         </div>
       </div>
 

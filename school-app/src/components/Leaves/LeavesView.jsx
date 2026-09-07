@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Palmtree,
   Calendar,
@@ -10,7 +10,9 @@ import {
   Search,
   Users,
   ShieldCheck,
-  MessageSquare
+  MessageSquare,
+  Award,
+  UserCheck
 } from 'lucide-react';
 import { useSchool } from '../../context/SchoolContext';
 import { formatDate } from '../../utils/helpers';
@@ -22,6 +24,7 @@ export const LeavesView = () => {
     reviewLeaveRequest,
     staff,
     currentRole,
+    currentUser,
     permissions
   } = useSchool();
 
@@ -33,20 +36,66 @@ export const LeavesView = () => {
   // Review Remarks modal state
   const [reviewModalData, setReviewModalData] = useState(null); // { id, newStatus, remarks }
 
-  // Filter leave requests
-  const filteredRequests = leaveRequests.filter(req => {
-    const matchSearch = req.staffName.toLowerCase().includes(search.toLowerCase()) ||
-                        req.department.toLowerCase().includes(search.toLowerCase()) ||
-                        req.id.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === 'All' || req.status === statusFilter;
-    return matchSearch && matchStatus;
-  });
+  const isTeacher = currentRole === 'teacher';
 
-  const pendingCount = leaveRequests.filter(l => l.status === 'Pending').length;
-  const approvedCount = leaveRequests.filter(l => l.status === 'Approved').length;
-  const rejectedCount = leaveRequests.filter(l => l.status === 'Rejected').length;
+  // Find the logged-in teacher's staff record
+  const currentTeacherStaff = useMemo(() => {
+    return staff.find(s =>
+      s.id === currentUser?.id ||
+      (s.email && currentUser?.email && s.email.toLowerCase() === currentUser.email.toLowerCase()) ||
+      (currentUser?.name && `${s.firstName} ${s.lastName}`.toLowerCase() === currentUser.name.toLowerCase())
+    ) || staff[0];
+  }, [staff, currentUser]);
+
+  // Scoped requests: If teacher, strictly show self leaves
+  const scopedRequests = useMemo(() => {
+    if (isTeacher) {
+      return leaveRequests.filter(req =>
+        req.staffId === currentTeacherStaff?.id ||
+        req.staffId === currentUser?.id ||
+        (currentUser?.name && req.staffName.toLowerCase() === currentUser.name.toLowerCase()) ||
+        (currentTeacherStaff && req.staffName.toLowerCase() === `${currentTeacherStaff.firstName} ${currentTeacherStaff.lastName}`.toLowerCase())
+      );
+    }
+    return leaveRequests;
+  }, [leaveRequests, isTeacher, currentTeacherStaff, currentUser]);
+
+  // Filter scoped leave requests by search and status
+  const filteredRequests = useMemo(() => {
+    return scopedRequests.filter(req => {
+      const matchSearch = req.staffName.toLowerCase().includes(search.toLowerCase()) ||
+                          req.department.toLowerCase().includes(search.toLowerCase()) ||
+                          req.id.toLowerCase().includes(search.toLowerCase()) ||
+                          (req.reason && req.reason.toLowerCase().includes(search.toLowerCase()));
+      const matchStatus = statusFilter === 'All' || req.status === statusFilter;
+      return matchSearch && matchStatus;
+    });
+  }, [scopedRequests, search, statusFilter]);
+
+  // Scoped staff list for Balances tab
+  const scopedStaffList = useMemo(() => {
+    if (isTeacher) {
+      return currentTeacherStaff ? [currentTeacherStaff] : [];
+    }
+    return staff;
+  }, [staff, isTeacher, currentTeacherStaff]);
+
+  const pendingCount = scopedRequests.filter(l => l.status === 'Pending').length;
+  const approvedCount = scopedRequests.filter(l => l.status === 'Approved').length;
+  const rejectedCount = scopedRequests.filter(l => l.status === 'Rejected').length;
+
+  // Teacher quota balance calculation
+  const teacherBalance = currentTeacherStaff?.leaveBalance || {
+    casualTotal: 12, casualUsed: 0,
+    sickTotal: 10, sickUsed: 0,
+    annualTotal: 15, annualUsed: 0
+  };
+  const totalQuotaRemaining = (teacherBalance.casualTotal - (teacherBalance.casualUsed || 0)) +
+                              (teacherBalance.sickTotal - (teacherBalance.sickUsed || 0)) +
+                              (teacherBalance.annualTotal - (teacherBalance.annualUsed || 0));
 
   const handleOpenReview = (id, newStatus) => {
+    if (!permissions?.canReviewLeave) return;
     setReviewModalData({
       id,
       newStatus,
@@ -73,41 +122,51 @@ export const LeavesView = () => {
             </div>
             <div>
               <h1 className="text-xl sm:text-2xl font-bold text-slate-800 tracking-tight">
-                Staff Leave Management & Quota
+                {isTeacher ? 'My Leaves & Annual Quota' : 'Staff Leave Management & Quota'}
               </h1>
               <p className="text-xs sm:text-sm text-slate-500">
-                Process faculty time-off requests, substitute allocations, and statutory leave balance accounts
+                {isTeacher
+                  ? 'Track your personal leave applications, supervisor review status, and remaining statutory balances'
+                  : 'Process faculty time-off requests, substitute allocations, and statutory leave balance accounts'}
               </p>
             </div>
           </div>
         </div>
 
-        <button
-          onClick={() => setIsApplyModalOpen(true)}
-          className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-100 flex items-center gap-2 transition-all"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Apply for Staff Leave</span>
-        </button>
+        {permissions?.canApplyLeave && (
+          <button
+            onClick={() => setIsApplyModalOpen(true)}
+            className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-100 flex items-center gap-2 transition-all cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>{isTeacher ? 'Apply for Leave' : 'Apply for Staff Leave'}</span>
+          </button>
+        )}
       </div>
 
-      {/* KPI Cards */}
+      {/* KPI Cards (Scoped for Teacher vs Admin) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         
         <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pending Approvals</span>
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+              {isTeacher ? 'My Pending Requests' : 'Pending Approvals'}
+            </span>
             <div className="p-2 bg-amber-50 text-amber-600 rounded-xl">
               <Clock className="w-4 h-4" />
             </div>
           </div>
           <div className="text-2xl font-bold text-amber-600 mt-2">{pendingCount} Requests</div>
-          <div className="text-xs text-slate-500 mt-1">Requires supervisor review</div>
+          <div className="text-xs text-slate-500 mt-1">
+            {isTeacher ? 'Awaiting administrative review' : 'Requires supervisor review'}
+          </div>
         </div>
 
         <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Approved Leaves</span>
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+              {isTeacher ? 'My Approved Leaves' : 'Approved Leaves'}
+            </span>
             <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
               <CheckCircle2 className="w-4 h-4" />
             </div>
@@ -118,13 +177,19 @@ export const LeavesView = () => {
 
         <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Active Staff Pool</span>
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+              {isTeacher ? 'My Available Quota' : 'Active Staff Pool'}
+            </span>
             <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
-              <Users className="w-4 h-4" />
+              {isTeacher ? <UserCheck className="w-4 h-4" /> : <Users className="w-4 h-4" />}
             </div>
           </div>
-          <div className="text-2xl font-bold text-indigo-600 mt-2">{staff.length} Faculty</div>
-          <div className="text-xs text-slate-500 mt-1">Tracking Casual, Sick & Annual quota</div>
+          <div className="text-2xl font-bold text-indigo-600 mt-2">
+            {isTeacher ? `${totalQuotaRemaining} Days Left` : `${staff.length} Faculty`}
+          </div>
+          <div className="text-xs text-slate-500 mt-1">
+            {isTeacher ? 'Casual, Sick & Annual balance' : 'Tracking Casual, Sick & Annual quota'}
+          </div>
         </div>
 
       </div>
@@ -133,13 +198,13 @@ export const LeavesView = () => {
       <div className="flex border-b border-slate-200 px-2 bg-white rounded-t-2xl">
         <button
           onClick={() => setActiveTab('requests')}
-          className={`py-3 px-4 text-xs font-bold border-b-2 transition-colors flex items-center gap-2 ${
+          className={`py-3 px-4 text-xs font-bold border-b-2 transition-colors flex items-center gap-2 cursor-pointer ${
             activeTab === 'requests'
               ? 'border-amber-500 text-amber-700'
               : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
         >
-          <span>Leave Applications & Workflow</span>
+          <span>{isTeacher ? 'My Leave Applications' : 'Leave Applications & Workflow'}</span>
           {pendingCount > 0 && (
             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-white">
               {pendingCount}
@@ -149,14 +214,14 @@ export const LeavesView = () => {
 
         <button
           onClick={() => setActiveTab('balances')}
-          className={`py-3 px-4 text-xs font-bold border-b-2 transition-colors flex items-center gap-2 ${
+          className={`py-3 px-4 text-xs font-bold border-b-2 transition-colors flex items-center gap-2 cursor-pointer ${
             activeTab === 'balances'
               ? 'border-amber-500 text-amber-700'
               : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
         >
-          <span>Staff Leave Quota & Balances</span>
-          <span className="text-[10px] text-slate-400">({staff.length} staff)</span>
+          <span>{isTeacher ? 'My Annual Leave Quota' : 'Staff Leave Quota & Balances'}</span>
+          {!isTeacher && <span className="text-[10px] text-slate-400">({staff.length} staff)</span>}
         </button>
       </div>
 
@@ -170,7 +235,7 @@ export const LeavesView = () => {
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Search by staff name, department, ID..."
+                placeholder={isTeacher ? "Search my leaves by type, reason, or ID..." : "Search by staff name, department, ID..."}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none bg-slate-50/50"
@@ -203,7 +268,7 @@ export const LeavesView = () => {
                     <th className="py-3 px-3">Duration & Dates</th>
                     <th className="py-3 px-3">Reason & Substitute</th>
                     <th className="py-3 px-3">Status</th>
-                    <th className="py-3 px-4 text-right">Actions</th>
+                    <th className="py-3 px-4 text-right">Actions / Review</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs">
@@ -211,7 +276,14 @@ export const LeavesView = () => {
                     <tr>
                       <td colSpan="6" className="py-12 text-center text-slate-400">
                         <Palmtree className="w-10 h-10 mx-auto text-slate-300 mb-2" />
-                        <p className="font-semibold text-slate-600">No leave applications found</p>
+                        <p className="font-semibold text-slate-600">
+                          {isTeacher ? 'No personal leave applications found' : 'No leave applications found'}
+                        </p>
+                        {isTeacher && (
+                          <p className="text-xs text-slate-400 mt-1">
+                            Click "+ Apply for Leave" to submit your first request.
+                          </p>
+                        )}
                       </td>
                     </tr>
                   ) : (
@@ -251,7 +323,7 @@ export const LeavesView = () => {
                             </div>
                             {req.reviewRemarks && (
                               <div className="text-[10px] text-indigo-600 mt-0.5 font-medium">
-                                Review: {req.reviewRemarks}
+                                Note: {req.reviewRemarks}
                               </div>
                             )}
                           </td>
@@ -286,13 +358,13 @@ export const LeavesView = () => {
                                   </button>
                                 </div>
                               ) : (
-                                <span className="text-[11px] font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded">
-                                  Pending Review
+                                <span className="text-[11px] font-semibold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
+                                  Under Review
                                 </span>
                               )
                             ) : (
-                              <span className="text-[11px] text-slate-400 font-medium">
-                                Reviewed by {req.reviewedBy || 'Admin'}
+                              <span className="text-[11px] text-slate-500 font-medium">
+                                {req.status === 'Approved' ? '✓ Approved' : '✕ Declined'}
                               </span>
                             )}
                           </td>
@@ -312,8 +384,14 @@ export const LeavesView = () => {
       {activeTab === 'balances' && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
           <div className="p-4 border-b border-slate-100 bg-slate-50">
-            <h3 className="font-bold text-slate-800 text-sm">Faculty Annual Leave Balance Accounts</h3>
-            <p className="text-xs text-slate-500">Statutory yearly allocations for Casual, Sick and Annual leave</p>
+            <h3 className="font-bold text-slate-800 text-sm">
+              {isTeacher ? 'My Annual Leave Quota & Balance' : 'Faculty Annual Leave Balance Accounts'}
+            </h3>
+            <p className="text-xs text-slate-500">
+              {isTeacher
+                ? 'Your personal statutory yearly allocations for Casual, Sick and Annual leave'
+                : 'Statutory yearly allocations for Casual, Sick and Annual leave'}
+            </p>
           </div>
 
           <div className="overflow-x-auto">
@@ -329,55 +407,63 @@ export const LeavesView = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs">
-                {staff.map((st) => {
-                  const b = st.leaveBalance || {
-                    casualTotal: 12, casualUsed: 0,
-                    sickTotal: 10, sickUsed: 0,
-                    annualTotal: 15, annualUsed: 0
-                  };
-                  const clLeft = b.casualTotal - (b.casualUsed || 0);
-                  const slLeft = b.sickTotal - (b.sickUsed || 0);
-                  const alLeft = b.annualTotal - (b.annualUsed || 0);
-                  const totalTaken = (b.casualUsed || 0) + (b.sickUsed || 0) + (b.annualUsed || 0);
+                {scopedStaffList.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="py-8 text-center text-slate-400">
+                      No staff profile linked to your account yet.
+                    </td>
+                  </tr>
+                ) : (
+                  scopedStaffList.map((st) => {
+                    const b = st.leaveBalance || {
+                      casualTotal: 12, casualUsed: 0,
+                      sickTotal: 10, sickUsed: 0,
+                      annualTotal: 15, annualUsed: 0
+                    };
+                    const clLeft = b.casualTotal - (b.casualUsed || 0);
+                    const slLeft = b.sickTotal - (b.sickUsed || 0);
+                    const alLeft = b.annualTotal - (b.annualUsed || 0);
+                    const totalTaken = (b.casualUsed || 0) + (b.sickUsed || 0) + (b.annualUsed || 0);
 
-                  return (
-                    <tr key={st.id} className="hover:bg-slate-50">
-                      <td className="py-3 px-4">
-                        <div className="font-bold text-slate-800">{st.firstName} {st.lastName}</div>
-                        <div className="text-[11px] text-slate-400">{st.role}</div>
-                      </td>
+                    return (
+                      <tr key={st.id} className="hover:bg-slate-50">
+                        <td className="py-3 px-4">
+                          <div className="font-bold text-slate-800">{st.firstName} {st.lastName}</div>
+                          <div className="text-[11px] text-slate-400">{st.role} • {st.id}</div>
+                        </td>
 
-                      <td className="py-3 px-3 font-semibold text-slate-700">
-                        {st.department}
-                      </td>
+                        <td className="py-3 px-3 font-semibold text-slate-700">
+                          {st.department}
+                        </td>
 
-                      {/* CL */}
-                      <td className="py-3 px-3">
-                        <div className="font-bold text-slate-800">{clLeft} <span className="text-[11px] text-slate-400 font-normal">/ {b.casualTotal} left</span></div>
-                        <div className="text-[10px] text-amber-600 font-medium">{b.casualUsed || 0} used</div>
-                      </td>
+                        {/* CL */}
+                        <td className="py-3 px-3">
+                          <div className="font-bold text-slate-800">{clLeft} <span className="text-[11px] text-slate-400 font-normal">/ {b.casualTotal} left</span></div>
+                          <div className="text-[10px] text-amber-600 font-medium">{b.casualUsed || 0} used</div>
+                        </td>
 
-                      {/* SL */}
-                      <td className="py-3 px-3">
-                        <div className="font-bold text-slate-800">{slLeft} <span className="text-[11px] text-slate-400 font-normal">/ {b.sickTotal} left</span></div>
-                        <div className="text-[10px] text-amber-600 font-medium">{b.sickUsed || 0} used</div>
-                      </td>
+                        {/* SL */}
+                        <td className="py-3 px-3">
+                          <div className="font-bold text-slate-800">{slLeft} <span className="text-[11px] text-slate-400 font-normal">/ {b.sickTotal} left</span></div>
+                          <div className="text-[10px] text-amber-600 font-medium">{b.sickUsed || 0} used</div>
+                        </td>
 
-                      {/* AL */}
-                      <td className="py-3 px-3">
-                        <div className="font-bold text-slate-800">{alLeft} <span className="text-[11px] text-slate-400 font-normal">/ {b.annualTotal} left</span></div>
-                        <div className="text-[10px] text-amber-600 font-medium">{b.annualUsed || 0} used</div>
-                      </td>
+                        {/* AL */}
+                        <td className="py-3 px-3">
+                          <div className="font-bold text-slate-800">{alLeft} <span className="text-[11px] text-slate-400 font-normal">/ {b.annualTotal} left</span></div>
+                          <div className="text-[10px] text-amber-600 font-medium">{b.annualUsed || 0} used</div>
+                        </td>
 
-                      {/* Total */}
-                      <td className="py-3 px-3 font-bold text-slate-900">
-                        <span className="px-2 py-0.5 bg-slate-100 rounded-full">
-                          {totalTaken} Days Total
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
+                        {/* Total */}
+                        <td className="py-3 px-3 font-bold text-slate-900">
+                          <span className="px-2 py-0.5 bg-slate-100 rounded-full">
+                            {totalTaken} Days Total
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
@@ -413,13 +499,13 @@ export const LeavesView = () => {
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setReviewModalData(null)}
-                className="px-3 py-1.5 border border-slate-200 text-slate-600 rounded-xl text-xs font-semibold"
+                className="px-3 py-1.5 border border-slate-200 text-slate-600 rounded-xl text-xs font-semibold cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 onClick={handleConfirmReview}
-                className={`px-4 py-1.5 text-white rounded-xl text-xs font-bold ${
+                className={`px-4 py-1.5 text-white rounded-xl text-xs font-bold cursor-pointer ${
                   reviewModalData.newStatus === 'Approved' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'
                 }`}
               >

@@ -108,13 +108,15 @@ export const StudentsView = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            onClick={handleExportCSV}
-            className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-2xs transition-all cursor-pointer"
-          >
-            <Download className="w-3.5 h-3.5 text-slate-500" />
-            <span>Export CSV</span>
-          </button>
+          {currentRole !== 'teacher' && (
+            <button
+              onClick={handleExportCSV}
+              className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-2xs transition-all cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5 text-slate-500" />
+              <span>Export CSV</span>
+            </button>
+          )}
 
           {permissions?.canEnrollStudents && (
             <button
