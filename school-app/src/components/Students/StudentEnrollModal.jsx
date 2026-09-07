@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, GraduationCap, User, Phone, MapPin, Heart, Bus, Sparkles } from 'lucide-react';
+import { X, GraduationCap, User, Phone, MapPin, Heart, Bus, Sparkles, AlertCircle } from 'lucide-react';
 import { useSchool } from '../../context/SchoolContext';
 import { ImageUploader } from '../Common/ImageUploader';
 
@@ -28,8 +28,10 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
   });
 
   const [activeTab, setActiveTab] = useState('personal');
+  const [errors, setErrors] = useState({});
 
   useEffect(() => {
+    setErrors({});
     if (studentToEdit) {
       setFormData(studentToEdit);
     } else {
@@ -60,13 +62,121 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (errors[name]) {
+      setErrors(prev => {
+        const next = { ...prev };
+        delete next[name];
+        return next;
+      });
+    }
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const validatePersonalTab = () => {
+    const newErrors = {};
+    if (!formData.firstName.trim()) {
+      newErrors.firstName = 'Student first name is required';
+    }
+    if (!formData.lastName.trim()) {
+      newErrors.lastName = 'Student last name is required';
+    }
+    if (!formData.dob) {
+      newErrors.dob = 'Date of birth is required';
+    }
+
+    setErrors(newErrors);
+
+    if (Object.keys(newErrors).length > 0) {
+      const firstError = Object.values(newErrors)[0];
+      showToast(firstError, 'error');
+      return false;
+    }
+    return true;
+  };
+
+  const validateAcademicTab = () => {
+    const newErrors = {};
+    if (!formData.grade) {
+      newErrors.grade = 'Grade / Class is required';
+    }
+    if (!formData.section) {
+      newErrors.section = 'Section is required';
+    }
+    if (!formData.rollNumber || !formData.rollNumber.trim()) {
+      newErrors.rollNumber = 'Roll number is required';
+    }
+    if (!formData.admissionDate) {
+      newErrors.admissionDate = 'Admission date is required';
+    }
+
+    setErrors(newErrors);
+
+    if (Object.keys(newErrors).length > 0) {
+      const firstError = Object.values(newErrors)[0];
+      showToast(firstError, 'error');
+      return false;
+    }
+    return true;
+  };
+
+  const validateGuardianTab = () => {
+    const newErrors = {};
+    if (!formData.guardianName || !formData.guardianName.trim()) {
+      newErrors.guardianName = 'Primary guardian name is required';
+    }
+    if (!formData.guardianPhone || !formData.guardianPhone.trim()) {
+      newErrors.guardianPhone = 'Guardian phone number is required';
+    }
+
+    setErrors(newErrors);
+
+    if (Object.keys(newErrors).length > 0) {
+      const firstError = Object.values(newErrors)[0];
+      showToast(firstError, 'error');
+      return false;
+    }
+    return true;
+  };
+
+  const handleNextStep = () => {
+    if (activeTab === 'personal') {
+      if (validatePersonalTab()) {
+        setActiveTab('academic');
+      }
+    } else if (activeTab === 'academic') {
+      if (validateAcademicTab()) {
+        setActiveTab('guardian');
+      }
+    }
+  };
+
+  const handleTabClick = (targetTab) => {
+    if (targetTab === 'personal') {
+      setActiveTab('personal');
+    } else if (targetTab === 'academic') {
+      if (validatePersonalTab()) {
+        setActiveTab('academic');
+      }
+    } else if (targetTab === 'guardian') {
+      if (validatePersonalTab() && validateAcademicTab()) {
+        setActiveTab('guardian');
+      }
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.firstName.trim() || !formData.lastName.trim()) {
-      showToast('Please fill in both first and last name.', 'error');
+
+    if (!validatePersonalTab()) {
+      setActiveTab('personal');
+      return;
+    }
+    if (!validateAcademicTab()) {
+      setActiveTab('academic');
+      return;
+    }
+    if (!validateGuardianTab()) {
+      setActiveTab('guardian');
       return;
     }
 
@@ -111,7 +221,7 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200 transition-colors"
+            className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -121,8 +231,8 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
         <div className="flex border-b border-slate-200 px-5 bg-white">
           <button
             type="button"
-            onClick={() => setActiveTab('personal')}
-            className={`py-3 px-4 text-xs font-bold border-b-2 transition-colors flex items-center gap-1.5 ${
+            onClick={() => handleTabClick('personal')}
+            className={`py-3 px-4 text-xs font-bold border-b-2 transition-colors flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'personal'
                 ? 'border-indigo-600 text-indigo-600'
                 : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -134,8 +244,8 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
 
           <button
             type="button"
-            onClick={() => setActiveTab('academic')}
-            className={`py-3 px-4 text-xs font-bold border-b-2 transition-colors flex items-center gap-1.5 ${
+            onClick={() => handleTabClick('academic')}
+            className={`py-3 px-4 text-xs font-bold border-b-2 transition-colors flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'academic'
                 ? 'border-indigo-600 text-indigo-600'
                 : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -147,8 +257,8 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
 
           <button
             type="button"
-            onClick={() => setActiveTab('guardian')}
-            className={`py-3 px-4 text-xs font-bold border-b-2 transition-colors flex items-center gap-1.5 ${
+            onClick={() => handleTabClick('guardian')}
+            className={`py-3 px-4 text-xs font-bold border-b-2 transition-colors flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'guardian'
                 ? 'border-indigo-600 text-indigo-600'
                 : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -173,12 +283,12 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
                   <input
                     type="text"
                     name="firstName"
-                    required
                     placeholder="e.g. Liam"
                     value={formData.firstName}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    className={`w-full px-3 py-2 text-sm border ${errors.firstName ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none`}
                   />
+                  {errors.firstName && <p className="text-[11px] text-rose-500 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.firstName}</p>}
                 </div>
 
                 <div>
@@ -188,12 +298,12 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
                   <input
                     type="text"
                     name="lastName"
-                    required
                     placeholder="e.g. Sterling"
                     value={formData.lastName}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    className={`w-full px-3 py-2 text-sm border ${errors.lastName ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none`}
                   />
+                  {errors.lastName && <p className="text-[11px] text-rose-500 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.lastName}</p>}
                 </div>
               </div>
 
@@ -216,15 +326,16 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Date of Birth
+                    Date of Birth (DOB) *
                   </label>
                   <input
                     type="date"
                     name="dob"
                     value={formData.dob}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    className={`w-full px-3 py-2 text-sm border ${errors.dob ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none`}
                   />
+                  {errors.dob && <p className="text-[11px] text-rose-500 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.dob}</p>}
                 </div>
 
                 <div>
@@ -286,12 +397,13 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
                     name="grade"
                     value={formData.grade}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white font-medium"
+                    className={`w-full px-3 py-2 text-sm border ${errors.grade ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white font-medium`}
                   >
                     {grades.map(g => (
                       <option key={g} value={g}>{g}</option>
                     ))}
                   </select>
+                  {errors.grade && <p className="text-[11px] text-rose-500 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.grade}</p>}
                 </div>
 
                 <div>
@@ -302,13 +414,14 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
                     name="section"
                     value={formData.section}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white font-medium"
+                    className={`w-full px-3 py-2 text-sm border ${errors.section ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white font-medium`}
                   >
                     <option value="A">Section A</option>
                     <option value="B">Section B</option>
                     <option value="C">Section C</option>
                     <option value="D">Section D</option>
                   </select>
+                  {errors.section && <p className="text-[11px] text-rose-500 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.section}</p>}
                 </div>
 
                 <div>
@@ -318,26 +431,27 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
                   <input
                     type="text"
                     name="rollNumber"
-                    required
                     placeholder="e.g. 101"
                     value={formData.rollNumber}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    className={`w-full px-3 py-2 text-sm border ${errors.rollNumber ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none`}
                   />
+                  {errors.rollNumber && <p className="text-[11px] text-rose-500 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.rollNumber}</p>}
                 </div>
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Admission Date
+                  Admission Date *
                 </label>
                 <input
                   type="date"
                   name="admissionDate"
                   value={formData.admissionDate}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  className={`w-full px-3 py-2 text-sm border ${errors.admissionDate ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none`}
                 />
+                {errors.admissionDate && <p className="text-[11px] text-rose-500 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.admissionDate}</p>}
               </div>
 
               <div>
@@ -367,12 +481,12 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
                   <input
                     type="text"
                     name="guardianName"
-                    required
                     placeholder="e.g. Robert Taylor"
                     value={formData.guardianName}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    className={`w-full px-3 py-2 text-sm border ${errors.guardianName ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none`}
                   />
+                  {errors.guardianName && <p className="text-[11px] text-rose-500 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.guardianName}</p>}
                 </div>
 
                 <div>
@@ -402,12 +516,12 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
                   <input
                     type="text"
                     name="guardianPhone"
-                    required
                     placeholder="+1 (555) 000-0000"
                     value={formData.guardianPhone}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    className={`w-full px-3 py-2 text-sm border ${errors.guardianPhone ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none`}
                   />
+                  {errors.guardianPhone && <p className="text-[11px] text-rose-500 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.guardianPhone}</p>}
                 </div>
 
                 <div>
@@ -460,7 +574,7 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl text-xs font-semibold transition-colors"
+              className="px-4 py-2 border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
             >
               Cancel
             </button>
@@ -469,18 +583,15 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
               {activeTab !== 'guardian' ? (
                 <button
                   type="button"
-                  onClick={() => {
-                    if (activeTab === 'personal') setActiveTab('academic');
-                    else if (activeTab === 'academic') setActiveTab('guardian');
-                  }}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-semibold transition-colors"
+                  onClick={handleNextStep}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-semibold transition-colors cursor-pointer"
                 >
                   Next Step →
                 </button>
               ) : (
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-100 transition-all flex items-center gap-1.5"
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-100 transition-all flex items-center gap-1.5 cursor-pointer"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>{studentToEdit ? 'Save Changes' : 'Complete Enrollment'}</span>

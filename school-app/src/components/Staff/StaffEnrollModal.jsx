@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Users, DollarSign, Calendar, Briefcase, Sparkles, Building, User, ShieldCheck, Eye, EyeOff, Lock, ShieldAlert } from 'lucide-react';
+import { X, Users, DollarSign, Calendar, Briefcase, Sparkles, Building, User, ShieldCheck, Eye, EyeOff, Lock, ShieldAlert, AlertCircle } from 'lucide-react';
 import { useSchool } from '../../context/SchoolContext';
 import { ImageUploader } from '../Common/ImageUploader';
 
@@ -8,6 +8,7 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
 
   const [activeTab, setActiveTab] = useState('personal');
   const [showPassword, setShowPassword] = useState(false);
+  const [errors, setErrors] = useState({});
 
   const normalizeRole = (r) => {
     if (!r) return 'teacher';
@@ -16,6 +17,37 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
     if (low === 'accountant') return 'accountant';
     if (low === 'support_staff' || low === 'support' || low === 'support staff' || low === 'non-teaching') return 'support_staff';
     return 'teacher';
+  };
+
+  const getDepartmentsForRole = (role) => {
+    const norm = normalizeRole(role);
+    switch (norm) {
+      case 'principal':
+        return ['Administration'];
+      case 'accountant':
+        return ['Finance & Accounts', 'Administration'];
+      case 'support_staff':
+        return [
+          'Support & Facilities',
+          'Housekeeping & Maintenance',
+          'Transport & Logistics',
+          'Campus Security',
+          'Cafeteria & Dining'
+        ];
+      case 'teacher':
+      default:
+        return [
+          'Science',
+          'Mathematics',
+          'Computer Science',
+          'Humanities',
+          'Languages',
+          'Physical Education',
+          'Fine Arts',
+          'Student Counseling',
+          'Library & Resource'
+        ];
+    }
   };
 
   const [formData, setFormData] = useState({
@@ -51,14 +83,20 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
   });
 
   const isSupportStaff = formData.role === 'support_staff';
+  const availableDepartments = getDepartmentsForRole(formData.role);
 
   useEffect(() => {
+    setErrors({});
     if (staffToEdit) {
       const normRole = normalizeRole(staffToEdit.role);
+      const validDepts = getDepartmentsForRole(normRole);
+      const initialDept = validDepts.includes(staffToEdit.department) ? staffToEdit.department : validDepts[0];
+
       setFormData({
         ...staffToEdit,
         password: '',
         role: normRole,
+        department: initialDept,
         designation: staffToEdit.designation || (staffToEdit.role && !['teacher', 'principal', 'accountant', 'admin', 'support_staff'].includes(staffToEdit.role.toLowerCase()) ? staffToEdit.role : ''),
         salary: {
           baseSalary: staffToEdit.salary?.baseSalary || (normRole === 'support_staff' ? 2500 : 5000),
@@ -111,26 +149,61 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => {
-      const updated = { ...prev, [name]: value };
-      // If switched to support_staff, auto adjust defaults
-      if (name === 'role' && value === 'support_staff' && !staffToEdit) {
-        if (prev.department === 'Science') updated.department = 'Support & Facilities';
-        if (!prev.designation) updated.designation = 'Head Peon';
-        if (prev.salary.baseSalary === 5000) {
-          updated.salary = {
-            ...prev.salary,
-            baseSalary: 2500,
-            hra: 500,
-            transportAllowance: 200,
-            specialAllowance: 100,
-            pfDeduction: 150,
-            taxDeduction: 50
-          };
+    if (errors[name]) {
+      setErrors(prev => {
+        const next = { ...prev };
+        delete next[name];
+        return next;
+      });
+    }
+
+    if (name === 'role') {
+      const normRole = normalizeRole(value);
+      const validDepts = getDepartmentsForRole(normRole);
+      
+      setFormData(prev => {
+        let nextDept = prev.department;
+        if (!validDepts.includes(nextDept)) {
+          nextDept = validDepts[0];
         }
-      }
-      return updated;
-    });
+
+        const updated = {
+          ...prev,
+          role: normRole,
+          department: nextDept
+        };
+
+        if (normRole === 'support_staff' && !staffToEdit) {
+          if (!prev.designation || prev.designation === 'Senior Physics Teacher & HOD' || prev.designation === 'Principal & Academic Director') {
+            updated.designation = 'Head Peon';
+          }
+          if (prev.salary.baseSalary === 5000) {
+            updated.salary = {
+              ...prev.salary,
+              baseSalary: 2500,
+              hra: 500,
+              transportAllowance: 200,
+              specialAllowance: 100,
+              pfDeduction: 150,
+              taxDeduction: 50
+            };
+          }
+        } else if (normRole === 'principal' && !staffToEdit) {
+          if (!prev.designation || prev.designation === 'Head Peon') {
+            updated.designation = 'Principal & Academic Director';
+          }
+        } else if (normRole === 'accountant' && !staffToEdit) {
+          if (!prev.designation || prev.designation === 'Head Peon') {
+            updated.designation = 'Senior Accountant';
+          }
+        }
+
+        return updated;
+      });
+      return;
+    }
+
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handleSalaryChange = (e) => {
@@ -144,20 +217,97 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
     }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!formData.firstName.trim() || !formData.lastName.trim()) {
-      showToast('Please provide first and last name.', 'error');
-      return;
+  const validatePersonalTab = () => {
+    const newErrors = {};
+    if (!formData.firstName.trim()) {
+      newErrors.firstName = 'First name is required';
+    }
+    if (!formData.lastName.trim()) {
+      newErrors.lastName = 'Last name is required';
     }
     if (!formData.email.trim()) {
-      showToast('Please provide an email or unique identifier.', 'error');
+      newErrors.email = 'Email address is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+      newErrors.email = 'Please enter a valid email format';
+    }
+    if (!formData.phone.trim()) {
+      newErrors.phone = 'Phone number is required';
+    }
+
+    setErrors(newErrors);
+
+    if (Object.keys(newErrors).length > 0) {
+      const firstError = Object.values(newErrors)[0];
+      showToast(firstError, 'error');
+      return false;
+    }
+    return true;
+  };
+
+  const validateEmploymentTab = () => {
+    const newErrors = {};
+    if (!formData.role) {
+      newErrors.role = 'Please select a role category';
+    }
+    if (!formData.designation.trim()) {
+      newErrors.designation = 'Designation is required';
+    }
+    if (!formData.department) {
+      newErrors.department = 'Department is required';
+    }
+    if (!formData.joiningDate) {
+      newErrors.joiningDate = 'Joining date is required';
+    }
+    if (!staffToEdit && !isSupportStaff && (!formData.password || !formData.password.trim())) {
+      newErrors.password = 'Account security password is required for portal login';
+    }
+
+    setErrors(newErrors);
+
+    if (Object.keys(newErrors).length > 0) {
+      const firstError = Object.values(newErrors)[0];
+      showToast(firstError, 'error');
+      return false;
+    }
+    return true;
+  };
+
+  const handleNextStep = () => {
+    if (activeTab === 'personal') {
+      if (validatePersonalTab()) {
+        setActiveTab('employment');
+      }
+    } else if (activeTab === 'employment') {
+      if (validateEmploymentTab()) {
+        setActiveTab('salary');
+      }
+    }
+  };
+
+  const handleTabClick = (targetTab) => {
+    if (targetTab === 'personal') {
+      setActiveTab('personal');
+    } else if (targetTab === 'employment') {
+      if (validatePersonalTab()) {
+        setActiveTab('employment');
+      }
+    } else if (targetTab === 'salary') {
+      if (validatePersonalTab() && validateEmploymentTab()) {
+        setActiveTab('salary');
+      }
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!validatePersonalTab()) {
+      setActiveTab('personal');
       return;
     }
 
-    // Password required ONLY when creating staff with active portal roles (not support staff)
-    if (!staffToEdit && !isSupportStaff && !formData.password?.trim()) {
-      showToast('Please set an initial security password for portal login.', 'error');
+    if (!validateEmploymentTab()) {
+      setActiveTab('employment');
       return;
     }
 
@@ -179,13 +329,6 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
       console.error('Staff submission error:', err);
     }
   };
-
-  const departments = [
-    'Science', 'Mathematics', 'Computer Science', 'Humanities',
-    'Languages', 'Physical Education', 'Fine Arts', 'Administration',
-    'Finance', 'Student Counseling', 'Library & Resource',
-    'Support & Facilities', 'Housekeeping & Maintenance', 'Transport & Logistics', 'Campus Security', 'Cafeteria & Dining'
-  ];
 
   // Live salary gross & net computation preview
   const gross = (Number(formData.salary.baseSalary) || 0) +
@@ -231,8 +374,8 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
         <div className="flex border-b border-slate-200 px-5 bg-white">
           <button
             type="button"
-            onClick={() => setActiveTab('personal')}
-            className={`py-3 px-4 text-xs font-bold border-b-2 transition-colors flex items-center gap-1.5 ${
+            onClick={() => handleTabClick('personal')}
+            className={`py-3 px-4 text-xs font-bold border-b-2 transition-colors flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'personal'
                 ? 'border-emerald-600 text-emerald-600'
                 : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -244,8 +387,8 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
 
           <button
             type="button"
-            onClick={() => setActiveTab('employment')}
-            className={`py-3 px-4 text-xs font-bold border-b-2 transition-colors flex items-center gap-1.5 ${
+            onClick={() => handleTabClick('employment')}
+            className={`py-3 px-4 text-xs font-bold border-b-2 transition-colors flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'employment'
                 ? 'border-emerald-600 text-emerald-600'
                 : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -257,8 +400,8 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
 
           <button
             type="button"
-            onClick={() => setActiveTab('salary')}
-            className={`py-3 px-4 text-xs font-bold border-b-2 transition-colors flex items-center gap-1.5 ${
+            onClick={() => handleTabClick('salary')}
+            className={`py-3 px-4 text-xs font-bold border-b-2 transition-colors flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'salary'
                 ? 'border-emerald-600 text-emerald-600'
                 : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -283,12 +426,12 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
                   <input
                     type="text"
                     name="firstName"
-                    required
                     placeholder="e.g. Marcus / Ramesh"
                     value={formData.firstName}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    className={`w-full px-3 py-2 text-sm border ${errors.firstName ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none`}
                   />
+                  {errors.firstName && <p className="text-[11px] text-rose-500 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.firstName}</p>}
                 </div>
 
                 <div>
@@ -298,29 +441,29 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
                   <input
                     type="text"
                     name="lastName"
-                    required
                     placeholder="e.g. Vance / Kumar"
                     value={formData.lastName}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    className={`w-full px-3 py-2 text-sm border ${errors.lastName ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none`}
                   />
+                  {errors.lastName && <p className="text-[11px] text-rose-500 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.lastName}</p>}
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Email Address / ID *
+                    Email Address / Login ID *
                   </label>
                   <input
                     type="email"
                     name="email"
-                    required
                     placeholder="staff@oakridge-academy.edu"
                     value={formData.email}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    className={`w-full px-3 py-2 text-sm border ${errors.email ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none`}
                   />
+                  {errors.email && <p className="text-[11px] text-rose-500 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.email}</p>}
                 </div>
 
                 <div>
@@ -330,57 +473,14 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
                   <input
                     type="text"
                     name="phone"
-                    required
                     placeholder="+1 (555) 000-0000"
                     value={formData.phone}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    className={`w-full px-3 py-2 text-sm border ${errors.phone ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none`}
                   />
+                  {errors.phone && <p className="text-[11px] text-rose-500 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.phone}</p>}
                 </div>
               </div>
-
-              {/* Password field / Support Staff Notice */}
-              {!staffToEdit && (
-                isSupportStaff ? (
-                  <div className="p-3.5 bg-amber-50/80 border border-amber-200 rounded-2xl flex items-start gap-3">
-                    <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                    <div>
-                      <div className="text-xs font-bold text-amber-900">No Portal Login Access Required</div>
-                      <div className="text-[11px] text-amber-700 mt-0.5">
-                        Support staff (Peons, Cleaning Staff, Security, Drivers) are managed administratively for daily roll call, salary payouts, and leaves without creating application user login accounts.
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl">
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
-                      <span className="flex items-center gap-1.5 text-slate-800">
-                        <Lock className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>Account Security Password *</span>
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-normal">Initial portal login password</span>
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        name="password"
-                        required={!isSupportStaff}
-                        placeholder="Set initial security password for staff portal"
-                        value={formData.password}
-                        onChange={handleChange}
-                        className="w-full pl-3 pr-10 py-2 text-sm bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none text-slate-800 font-medium"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-                )
-              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -438,7 +538,7 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
             </div>
           )}
 
-          {/* TAB 2: Employment, Role & Designation */}
+          {/* TAB 2: Employment, Role & Designation (Includes Account Security Password) */}
           {activeTab === 'employment' && (
             <div className="space-y-4 animate-fade-in">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -454,7 +554,6 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
                   </label>
                   <select
                     name="role"
-                    required
                     value={formData.role}
                     onChange={handleChange}
                     className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white font-bold text-slate-800"
@@ -474,20 +573,64 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
                   <input
                     type="text"
                     name="designation"
-                    required
                     placeholder={isSupportStaff ? "e.g. Head Peon / Cleaning Staff / Bus Driver" : "e.g. Senior Physics Teacher & HOD"}
                     value={formData.designation}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none text-slate-800 font-medium"
+                    className={`w-full px-3 py-2 text-sm border ${errors.designation ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none text-slate-800 font-medium`}
                   />
+                  {errors.designation && <p className="text-[11px] text-rose-500 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.designation}</p>}
                 </div>
 
               </div>
 
+              {/* Account Security Password / Support Staff Notice - Placed here in Tab 2 based on Role */}
+              {!staffToEdit && (
+                isSupportStaff ? (
+                  <div className="p-3.5 bg-amber-50/80 border border-amber-200 rounded-2xl flex items-start gap-3">
+                    <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <div className="text-xs font-bold text-amber-900">No Portal Login Access Required</div>
+                      <div className="text-[11px] text-amber-700 mt-0.5">
+                        Support staff (Peons, Cleaning Staff, Security, Drivers) are managed administratively for daily roll call, salary payouts, and leaves without creating application user login accounts.
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className={`p-3.5 bg-slate-50 border ${errors.password ? 'border-rose-300 bg-rose-50/20' : 'border-slate-200'} rounded-2xl`}>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 text-slate-800">
+                        <Lock className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Account Security Password *</span>
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-normal">Initial portal login password for {formData.role.toUpperCase()}</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        name="password"
+                        placeholder={`Set initial security password for ${formData.role} portal login`}
+                        value={formData.password}
+                        onChange={handleChange}
+                        className={`w-full pl-3 pr-10 py-2 text-sm bg-white border ${errors.password ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none text-slate-800 font-medium`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    {errors.password && <p className="text-[11px] text-rose-500 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.password}</p>}
+                  </div>
+                )
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Department *
+                  <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                    <span>Department *</span>
+                    <span className="text-[10px] text-slate-400 font-normal">Filtered for {formData.role.toUpperCase()}</span>
                   </label>
                   <select
                     name="department"
@@ -495,7 +638,7 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
                     onChange={handleChange}
                     className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white font-medium"
                   >
-                    {departments.map(d => (
+                    {availableDepartments.map(d => (
                       <option key={d} value={d}>{d}</option>
                     ))}
                   </select>
@@ -509,11 +652,11 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
                   <input
                     type="date"
                     name="joiningDate"
-                    required
                     value={formData.joiningDate}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none font-semibold text-slate-800"
+                    className={`w-full px-3 py-2 text-sm border ${errors.joiningDate ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none font-semibold text-slate-800`}
                   />
+                  {errors.joiningDate && <p className="text-[11px] text-rose-500 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.joiningDate}</p>}
                 </div>
               </div>
 
@@ -561,7 +704,7 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
                     name="qualification"
                     value={formData.qualification}
                     onChange={handleChange}
-                    placeholder={isSupportStaff ? "e.g. Commercial Driving License / Security Cert." : "e.g. Ph.D. Applied Physics, B.Ed."}
+                    placeholder={isSupportStaff ? "e.g. Heavy Vehicle License, Maintenance Certificate" : "e.g. M.Sc. Physics, B.Ed."}
                     className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                   />
                 </div>
@@ -762,10 +905,7 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
               {activeTab !== 'salary' ? (
                 <button
                   type="button"
-                  onClick={() => {
-                    if (activeTab === 'personal') setActiveTab('employment');
-                    else if (activeTab === 'employment') setActiveTab('salary');
-                  }}
+                  onClick={handleNextStep}
                   className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-semibold transition-colors cursor-pointer"
                 >
                   Next Step →
