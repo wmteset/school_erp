@@ -127,7 +127,7 @@ export class CreateStaffDto {
   @IsString()
   password?: string;
 
-  @ApiProperty({ example: 'teacher', description: 'RBAC Role: principal | teacher | accountant' })
+  @ApiProperty({ example: 'support_staff', description: 'Role Category: principal | teacher | accountant | support_staff' })
   @IsNotEmpty()
   @IsString()
   role: string;

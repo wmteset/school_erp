@@ -27,6 +27,7 @@ export const StaffView = () => {
 
   const [search, setSearch] = useState('');
   const [selectedDept, setSelectedDept] = useState('All');
+  const [selectedRole, setSelectedRole] = useState('All');
   const [selectedType, setSelectedType] = useState('All');
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'table'
 
@@ -48,15 +49,17 @@ export const StaffView = () => {
 
       const matchDept = selectedDept === 'All' || st.department === selectedDept;
       const matchType = selectedType === 'All' || st.employmentType === selectedType;
+      const matchRole = selectedRole === 'All' || 
+        (selectedRole === 'support_staff' ? (st.role?.toLowerCase() === 'support_staff' || st.role?.toLowerCase() === 'support') : st.role?.toLowerCase() === selectedRole.toLowerCase());
 
-      return matchSearch && matchDept && matchType;
+      return matchSearch && matchDept && matchType && matchRole;
     });
-  }, [staff, search, selectedDept, selectedType]);
+  }, [staff, search, selectedDept, selectedType, selectedRole]);
 
   // Export CSV
   const handleExportCSV = () => {
     const headers = [
-      'Staff ID', 'First Name', 'Last Name', 'Role (RBAC)', 'Designation', 'Department',
+      'Staff ID', 'First Name', 'Last Name', 'Role Category', 'Designation', 'Department',
       'Joining Date', 'Employment Type', 'Base Salary', 'HRA',
       'Net Salary', 'Phone', 'Email'
     ];
@@ -73,7 +76,7 @@ export const StaffView = () => {
         st.id,
         st.firstName,
         st.lastName,
-        `"${st.role?.toUpperCase() || 'TEACHER'}"`,
+        `"${st.role?.toLowerCase() === 'support_staff' ? 'SUPPORT STAFF' : (st.role?.toUpperCase() || 'TEACHER')}"`,
         `"${st.designation || st.role}"`,
         st.department,
         st.joiningDate,
@@ -98,7 +101,8 @@ export const StaffView = () => {
 
   const departments = [
     'All', 'Science', 'Mathematics', 'Computer Science', 'Humanities',
-    'Physical Education', 'Administration', 'Fine Arts', 'Finance'
+    'Languages', 'Physical Education', 'Fine Arts', 'Administration',
+    'Finance', 'Support & Facilities', 'Housekeeping & Maintenance', 'Transport & Logistics', 'Campus Security', 'Cafeteria & Dining'
   ];
 
   return (
@@ -116,7 +120,7 @@ export const StaffView = () => {
                 Faculty & Staff Management
               </h1>
               <p className="text-xs sm:text-sm text-slate-500">
-                Manage staff profiles, official joining dates, compensation packages, attendance & leaves
+                Manage teaching faculty, administration, and support staff profiles, official designations, wages & attendance
               </p>
             </div>
           </div>
@@ -155,7 +159,7 @@ export const StaffView = () => {
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Search by staff name, department, role, or ID..."
+              placeholder="Search by name, designation (e.g. Peon, Teacher), department, or ID..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-10 pr-4 py-2 text-xs sm:text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-slate-50/50"
@@ -165,6 +169,19 @@ export const StaffView = () => {
           {/* Filters */}
           <div className="flex flex-wrap items-center gap-2">
             
+            {/* Role Filter */}
+            <select
+              value={selectedRole}
+              onChange={(e) => setSelectedRole(e.target.value)}
+              className="px-3 py-2 text-xs font-medium border border-slate-200 rounded-xl focus:outline-none bg-white text-slate-700"
+            >
+              <option value="All">All Staff Roles</option>
+              <option value="teacher">Teachers / Faculty</option>
+              <option value="principal">Principals / Admin</option>
+              <option value="accountant">Accountants / Finance</option>
+              <option value="support_staff">Support Staff (Peons, Cleaning, Transport)</option>
+            </select>
+
             {/* Department Filter */}
             <select
               value={selectedDept}
@@ -217,12 +234,17 @@ export const StaffView = () => {
         {/* Quick Result Counter */}
         <div className="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100">
           <span>Showing {filteredStaff.length} of {staff.length} staff members</span>
-          {search && (
+          {(search || selectedDept !== 'All' || selectedRole !== 'All' || selectedType !== 'All') && (
             <button
-              onClick={() => setSearch('')}
-              className="text-emerald-600 hover:underline font-medium"
+              onClick={() => {
+                setSearch('');
+                setSelectedDept('All');
+                setSelectedRole('All');
+                setSelectedType('All');
+              }}
+              className="text-emerald-600 hover:underline font-medium cursor-pointer"
             >
-              Clear search
+              Clear filters
             </button>
           )}
         </div>
@@ -270,6 +292,8 @@ export const StaffView = () => {
                     const leaves = st.leaveBalance || { casualTotal: 12, casualUsed: 0, sickTotal: 10, sickUsed: 0 };
                     const remainingCasual = leaves.casualTotal - (leaves.casualUsed || 0);
 
+                    const isSupport = st.role?.toLowerCase() === 'support_staff' || st.role?.toLowerCase() === 'support';
+
                     return (
                       <tr
                         key={st.id}
@@ -305,9 +329,10 @@ export const StaffView = () => {
                           <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider border mb-1 ${
                             st.role?.toLowerCase() === 'principal' ? 'bg-purple-50 text-purple-700 border-purple-200' :
                             st.role?.toLowerCase() === 'accountant' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                            isSupport ? 'bg-slate-100 text-slate-700 border-slate-300' :
                             'bg-emerald-50 text-emerald-700 border-emerald-200'
                           }`}>
-                            {st.role?.toUpperCase() || 'TEACHER'}
+                            {isSupport ? 'SUPPORT STAFF' : (st.role?.toUpperCase() || 'TEACHER')}
                           </span>
                           <div className="text-[11px] text-slate-600 font-medium">{st.department}</div>
                         </td>
@@ -372,7 +397,7 @@ export const StaffView = () => {
                             <button
                               onClick={() => setSelectedStaffForProfile(st)}
                               title="View Full Profile"
-                              className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                              className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
                             >
                               <Eye className="w-4 h-4" />
                             </button>
@@ -380,7 +405,7 @@ export const StaffView = () => {
                             <button
                               onClick={() => setStaffForIDCard(st)}
                               title="Print Staff Badge"
-                              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
                             >
                               <Printer className="w-4 h-4" />
                             </button>
@@ -422,6 +447,8 @@ export const StaffView = () => {
             const tax = st.salary?.taxDeduction || 400;
             const net = (base + hra + trans + spec) - (pf + tax);
 
+            const isSupport = st.role?.toLowerCase() === 'support_staff' || st.role?.toLowerCase() === 'support';
+
             return (
               <div
                 key={st.id}
@@ -447,9 +474,10 @@ export const StaffView = () => {
                           <span className={`px-1.5 py-0.2 rounded text-[10px] font-extrabold uppercase tracking-wider border ${
                             st.role?.toLowerCase() === 'principal' ? 'bg-purple-50 text-purple-700 border-purple-200' :
                             st.role?.toLowerCase() === 'accountant' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                            isSupport ? 'bg-slate-100 text-slate-700 border-slate-300' :
                             'bg-emerald-50 text-emerald-700 border-emerald-200'
                           }`}>
-                            {st.role?.toUpperCase() || 'TEACHER'}
+                            {isSupport ? 'SUPPORT STAFF' : (st.role?.toUpperCase() || 'TEACHER')}
                           </span>
                           <span className="text-[10px] text-slate-400 font-mono">
                             {st.department} • {st.id}
@@ -483,7 +511,7 @@ export const StaffView = () => {
                 <div className="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between">
                   <button
                     onClick={() => setStaffForIDCard(st)}
-                    className="text-xs font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1"
+                    className="text-xs font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1 cursor-pointer"
                   >
                     <Printer className="w-3.5 h-3.5" /> ID Badge
                   </button>
@@ -502,7 +530,7 @@ export const StaffView = () => {
                     )}
                     <button
                       onClick={() => setSelectedStaffForProfile(st)}
-                      className="px-3 py-1 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-2xs"
+                      className="px-3 py-1 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-2xs cursor-pointer"
                     >
                       Dossier
                     </button>

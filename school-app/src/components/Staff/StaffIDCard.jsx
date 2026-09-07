@@ -82,7 +82,7 @@ export const StaffIDCard = ({ staffMember, onClose }) => {
                 {staffMember.designation || staffMember.role}
               </div>
               <div className="inline-block px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
-                {staffMember.role?.toUpperCase() || 'TEACHER'}
+                {staffMember.role?.toLowerCase() === 'support_staff' || staffMember.role?.toLowerCase() === 'support' ? 'SUPPORT STAFF' : (staffMember.role?.toUpperCase() || 'TEACHER')}
               </div>
               
               <div className="pt-1 text-[10px] space-y-0.5 text-slate-300">

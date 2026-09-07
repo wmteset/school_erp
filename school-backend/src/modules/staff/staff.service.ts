@@ -16,12 +16,13 @@ export class StaffService {
     private readonly userRepo: Repository<UserEntity>,
   ) {}
 
-  private normalizeRbacRole(roleInput?: string): UserRole {
+  private normalizeStaffRole(roleInput?: string): string {
     if (!roleInput) return UserRole.TEACHER;
     const clean = roleInput.toLowerCase().trim();
     if (clean === 'principal' || clean === UserRole.PRINCIPAL) return UserRole.PRINCIPAL;
     if (clean === 'accountant' || clean === UserRole.ACCOUNTANT) return UserRole.ACCOUNTANT;
-    return UserRole.TEACHER; // Default and prevents duplicate super admin creation
+    if (clean === 'support_staff' || clean === 'support' || clean === 'support staff' || clean === 'non-teaching') return 'support_staff';
+    return UserRole.TEACHER;
   }
 
   async findAll(filterDto?: FilterStaffDto): Promise<StaffEntity[]> {
@@ -62,23 +63,26 @@ export class StaffService {
       staffId = `STF-${100 + count + 1}`;
     }
 
-    const rbacRole = this.normalizeRbacRole(createDto.role);
-    const designation = createDto.designation?.trim() || (createDto.role === rbacRole ? `${rbacRole.charAt(0).toUpperCase() + rbacRole.slice(1)} - ${createDto.department}` : createDto.role);
+    const staffRole = this.normalizeStaffRole(createDto.role);
+    const isSupportStaff = staffRole === 'support_staff';
+    
+    const designation = createDto.designation?.trim() || 
+      (isSupportStaff ? 'Support Staff' : `${staffRole.charAt(0).toUpperCase() + staffRole.slice(1)} - ${createDto.department}`);
 
     const newStaff = this.staffRepo.create({
       ...createDto,
       id: staffId,
-      role: rbacRole,
+      role: staffRole,
       designation: designation,
       status: createDto.status || 'Active',
       joiningDate: createDto.joiningDate || new Date().toISOString().split('T')[0],
       salary: {
-        baseSalary: createDto.salary?.baseSalary || 5000,
-        hra: createDto.salary?.hra || 1100,
-        transportAllowance: createDto.salary?.transportAllowance || 350,
-        specialAllowance: createDto.salary?.specialAllowance || 250,
-        pfDeduction: createDto.salary?.pfDeduction || 320,
-        taxDeduction: createDto.salary?.taxDeduction || 420,
+        baseSalary: createDto.salary?.baseSalary || (isSupportStaff ? 2500 : 5000),
+        hra: createDto.salary?.hra || (isSupportStaff ? 500 : 1100),
+        transportAllowance: createDto.salary?.transportAllowance || (isSupportStaff ? 200 : 350),
+        specialAllowance: createDto.salary?.specialAllowance || (isSupportStaff ? 100 : 250),
+        pfDeduction: createDto.salary?.pfDeduction || (isSupportStaff ? 150 : 320),
+        taxDeduction: createDto.salary?.taxDeduction || (isSupportStaff ? 50 : 420),
         bankName: createDto.salary?.bankName || 'Chase National Bank',
         accountNumber: createDto.salary?.accountNumber || '•••• 1234',
         taxId: createDto.salary?.taxId || 'TAX-US-99000',
@@ -97,38 +101,40 @@ export class StaffService {
 
     const savedStaff = await this.staffRepo.save(newStaff);
 
-    // Sync / Create User account for this staff member
-    try {
-      const staffEmail = savedStaff.email.toLowerCase().trim();
-      const initialPassword = createDto.password?.trim() || rbacRole || 'password';
-      let user = await this.userRepo.findOne({ where: { email: staffEmail } });
-      if (!user) {
-        user = this.userRepo.create({
-          id: `USR-${savedStaff.id}`,
-          email: staffEmail,
-          password: initialPassword,
-          name: `${savedStaff.firstName} ${savedStaff.lastName}`,
-          role: rbacRole,
-          title: savedStaff.designation || designation,
-          department: savedStaff.department,
-          staffId: savedStaff.id,
-          avatar: savedStaff.avatar || '',
-          isActive: true,
-        });
-      } else {
-        user.name = `${savedStaff.firstName} ${savedStaff.lastName}`;
-        user.role = rbacRole;
-        user.title = savedStaff.designation || designation;
-        user.department = savedStaff.department;
-        user.staffId = savedStaff.id;
-        user.avatar = savedStaff.avatar || user.avatar;
-        if (createDto.password?.trim()) {
-          user.password = createDto.password.trim();
+    // Sync / Create User account for this staff member ONLY IF NOT support_staff
+    if (!isSupportStaff) {
+      try {
+        const staffEmail = savedStaff.email.toLowerCase().trim();
+        const initialPassword = createDto.password?.trim() || staffRole || 'password';
+        let user = await this.userRepo.findOne({ where: { email: staffEmail } });
+        if (!user) {
+          user = this.userRepo.create({
+            id: `USR-${savedStaff.id}`,
+            email: staffEmail,
+            password: initialPassword,
+            name: `${savedStaff.firstName} ${savedStaff.lastName}`,
+            role: staffRole as UserRole,
+            title: savedStaff.designation || designation,
+            department: savedStaff.department,
+            staffId: savedStaff.id,
+            avatar: savedStaff.avatar || '',
+            isActive: true,
+          });
+        } else {
+          user.name = `${savedStaff.firstName} ${savedStaff.lastName}`;
+          user.role = staffRole as UserRole;
+          user.title = savedStaff.designation || designation;
+          user.department = savedStaff.department;
+          user.staffId = savedStaff.id;
+          user.avatar = savedStaff.avatar || user.avatar;
+          if (createDto.password?.trim()) {
+            user.password = createDto.password.trim();
+          }
         }
+        await this.userRepo.save(user);
+      } catch (err) {
+        console.warn('Failed to sync user account for staff:', err.message);
       }
-      await this.userRepo.save(user);
-    } catch (err) {
-      console.warn('Failed to sync user account for staff:', err.message);
     }
 
     return savedStaff;
@@ -148,7 +154,7 @@ export class StaffService {
     }
 
     if (updateDto.role) {
-      staff.role = this.normalizeRbacRole(updateDto.role);
+      staff.role = this.normalizeStaffRole(updateDto.role);
       delete updateDto.role;
     }
 
@@ -168,10 +174,15 @@ export class StaffService {
         user = await this.userRepo.findOne({ where: { staffId: updatedStaff.id } });
       }
 
-      if (user && user.role !== UserRole.ADMIN) {
+      if (updatedStaff.role === 'support_staff') {
+        // If assigned as support_staff, remove any login account
+        if (user && user.role !== UserRole.ADMIN) {
+          await this.userRepo.remove(user);
+        }
+      } else if (user && user.role !== UserRole.ADMIN) {
         user.name = `${updatedStaff.firstName} ${updatedStaff.lastName}`;
         user.email = staffEmail;
-        user.role = this.normalizeRbacRole(updatedStaff.role);
+        user.role = updatedStaff.role as UserRole;
         user.title = updatedStaff.designation || updatedStaff.role;
         user.department = updatedStaff.department;
         user.avatar = updatedStaff.avatar || user.avatar;
