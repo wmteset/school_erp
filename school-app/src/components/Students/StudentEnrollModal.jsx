@@ -1,80 +1,227 @@
 import React, { useState, useEffect } from 'react';
-import { X, GraduationCap, User, Phone, MapPin, Heart, Bus, Sparkles } from 'lucide-react';
+import { X, GraduationCap, User, Phone, MapPin, Heart, Bus, Sparkles, AlertCircle, Hash } from 'lucide-react';
 import { useSchool } from '../../context/SchoolContext';
 import { ImageUploader } from '../Common/ImageUploader';
+import { api } from '../../api/client';
 
 export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) => {
-  const { addStudent, updateStudent, classes, showToast } = useSchool();
+  const { addStudent, updateStudent, students = [], showToast } = useSchool();
 
-  const [formData, setFormData] = useState({
+  const emptyStudentForm = {
     firstName: '',
     lastName: '',
-    gender: 'Male',
-    dob: '2010-01-01',
-    bloodGroup: 'O+',
-    grade: 'Grade 10',
-    section: 'A',
-    rollNumber: '101',
-    admissionDate: new Date().toISOString().split('T')[0],
+    gender: '',
+    dob: '',
+    bloodGroup: '',
+    grade: '',
+    section: '',
+    rollNumber: '',
+    admissionDate: '',
     status: 'Active',
     guardianName: '',
-    guardianRelation: 'Father',
+    guardianRelation: '',
     guardianPhone: '',
     guardianEmail: '',
     address: '',
     medicalNotes: '',
-    transportRoute: 'Bus Route #1',
-    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=250&q=80'
-  });
+    transportRoute: '',
+    avatar: ''
+  };
 
+  const [formData, setFormData] = useState(emptyStudentForm);
   const [activeTab, setActiveTab] = useState('personal');
+  const [errors, setErrors] = useState({});
+
+  const calculateNextRollNumber = () => {
+    if (!students || students.length === 0) return '101';
+    const numericRolls = students
+      .map(s => parseInt(s.rollNumber, 10))
+      .filter(num => !isNaN(num) && num > 0);
+    const maxRoll = numericRolls.length > 0 ? Math.max(...numericRolls) : 100;
+    return String(maxRoll + 1);
+  };
 
   useEffect(() => {
+    setErrors({});
     if (studentToEdit) {
-      setFormData(studentToEdit);
-    } else {
       setFormData({
-        firstName: '',
-        lastName: '',
-        gender: 'Male',
-        dob: '2010-05-15',
-        bloodGroup: 'O+',
-        grade: 'Grade 10',
-        section: 'A',
-        rollNumber: String(Math.floor(100 + Math.random() * 900)),
-        admissionDate: new Date().toISOString().split('T')[0],
-        status: 'Active',
-        guardianName: '',
-        guardianRelation: 'Father',
-        guardianPhone: '+1 (555) 000-0000',
-        guardianEmail: '',
-        address: '123 Academic Way',
-        medicalNotes: 'None',
-        transportRoute: 'Bus Route #1',
-        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=250&q=80'
+        firstName: studentToEdit.firstName || '',
+        lastName: studentToEdit.lastName || '',
+        gender: studentToEdit.gender || 'Male',
+        dob: studentToEdit.dob || '',
+        bloodGroup: studentToEdit.bloodGroup || 'O+',
+        grade: studentToEdit.grade || '',
+        section: studentToEdit.section || 'A',
+        rollNumber: studentToEdit.rollNumber || '',
+        admissionDate: studentToEdit.admissionDate || '',
+        status: studentToEdit.status || 'Active',
+        guardianName: studentToEdit.guardianName || '',
+        guardianRelation: studentToEdit.guardianRelation || 'Father',
+        guardianPhone: studentToEdit.guardianPhone || '',
+        guardianEmail: studentToEdit.guardianEmail || '',
+        address: studentToEdit.address || '',
+        medicalNotes: studentToEdit.medicalNotes || '',
+        transportRoute: studentToEdit.transportRoute || '',
+        avatar: studentToEdit.avatar || ''
       });
+    } else {
+      const initialRoll = calculateNextRollNumber();
+      setFormData({
+        ...emptyStudentForm,
+        rollNumber: initialRoll,
+      });
+
+      // Synchronize with backend API for exact database count
+      api.students.getNextRollNumber()
+        .then(res => {
+          if (res?.nextRollNumber) {
+            setFormData(prev => ({
+              ...prev,
+              rollNumber: res.nextRollNumber,
+            }));
+          }
+        })
+        .catch(() => {
+          // Context fallback already set
+        });
     }
-  }, [studentToEdit, isOpen]);
+  }, [studentToEdit, isOpen, students]);
 
   if (!isOpen) return null;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (errors[name]) {
+      setErrors(prev => {
+        const next = { ...prev };
+        delete next[name];
+        return next;
+      });
+    }
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const validatePersonalTab = () => {
+    const newErrors = {};
+    if (!formData.firstName.trim()) {
+      newErrors.firstName = 'Student first name is required';
+    }
+    if (!formData.lastName.trim()) {
+      newErrors.lastName = 'Student last name is required';
+    }
+    if (!formData.dob) {
+      newErrors.dob = 'Date of birth is required';
+    }
+
+    setErrors(newErrors);
+
+    if (Object.keys(newErrors).length > 0) {
+      const firstError = Object.values(newErrors)[0];
+      showToast(firstError, 'error');
+      return false;
+    }
+    return true;
+  };
+
+  const validateAcademicTab = () => {
+    const newErrors = {};
+    if (!formData.grade) {
+      newErrors.grade = 'Grade / Class is required';
+    }
+    if (!formData.section) {
+      newErrors.section = 'Section is required';
+    }
+    if (!formData.rollNumber || !formData.rollNumber.trim()) {
+      newErrors.rollNumber = 'Roll number is required';
+    }
+    if (!formData.admissionDate) {
+      newErrors.admissionDate = 'Admission date is required';
+    }
+
+    setErrors(newErrors);
+
+    if (Object.keys(newErrors).length > 0) {
+      const firstError = Object.values(newErrors)[0];
+      showToast(firstError, 'error');
+      return false;
+    }
+    return true;
+  };
+
+  const validateGuardianTab = () => {
+    const newErrors = {};
+    if (!formData.guardianName || !formData.guardianName.trim()) {
+      newErrors.guardianName = 'Primary guardian name is required';
+    }
+    if (!formData.guardianPhone || !formData.guardianPhone.trim()) {
+      newErrors.guardianPhone = 'Guardian phone number is required';
+    }
+
+    setErrors(newErrors);
+
+    if (Object.keys(newErrors).length > 0) {
+      const firstError = Object.values(newErrors)[0];
+      showToast(firstError, 'error');
+      return false;
+    }
+    return true;
+  };
+
+  const handleNextStep = () => {
+    if (activeTab === 'personal') {
+      if (validatePersonalTab()) {
+        setActiveTab('academic');
+      }
+    } else if (activeTab === 'academic') {
+      if (validateAcademicTab()) {
+        setActiveTab('guardian');
+      }
+    }
+  };
+
+  const handleTabClick = (targetTab) => {
+    if (targetTab === 'personal') {
+      setActiveTab('personal');
+    } else if (targetTab === 'academic') {
+      if (validatePersonalTab()) {
+        setActiveTab('academic');
+      }
+    } else if (targetTab === 'guardian') {
+      if (validatePersonalTab() && validateAcademicTab()) {
+        setActiveTab('guardian');
+      }
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.firstName.trim() || !formData.lastName.trim()) {
-      showToast('Please fill in both first and last name.', 'error');
+
+    if (!validatePersonalTab()) {
+      setActiveTab('personal');
+      return;
+    }
+    if (!validateAcademicTab()) {
+      setActiveTab('academic');
+      return;
+    }
+    if (!validateGuardianTab()) {
+      setActiveTab('guardian');
       return;
     }
 
+    const payload = {
+      ...formData,
+      gender: formData.gender || 'Male',
+      bloodGroup: formData.bloodGroup || 'O+',
+      guardianRelation: formData.guardianRelation || 'Father',
+      status: formData.status || 'Active'
+    };
+
     try {
       if (studentToEdit) {
-        await updateStudent(studentToEdit.id, formData);
+        await updateStudent(studentToEdit.id, payload);
       } else {
-        await addStudent(formData);
+        await addStudent(payload);
       }
       onClose();
     } catch (err) {
@@ -111,7 +258,7 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200 transition-colors"
+            className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -121,8 +268,8 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
         <div className="flex border-b border-slate-200 px-5 bg-white">
           <button
             type="button"
-            onClick={() => setActiveTab('personal')}
-            className={`py-3 px-4 text-xs font-bold border-b-2 transition-colors flex items-center gap-1.5 ${
+            onClick={() => handleTabClick('personal')}
+            className={`py-3 px-4 text-xs font-bold border-b-2 transition-colors flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'personal'
                 ? 'border-indigo-600 text-indigo-600'
                 : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -134,8 +281,8 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
 
           <button
             type="button"
-            onClick={() => setActiveTab('academic')}
-            className={`py-3 px-4 text-xs font-bold border-b-2 transition-colors flex items-center gap-1.5 ${
+            onClick={() => handleTabClick('academic')}
+            className={`py-3 px-4 text-xs font-bold border-b-2 transition-colors flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'academic'
                 ? 'border-indigo-600 text-indigo-600'
                 : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -147,8 +294,8 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
 
           <button
             type="button"
-            onClick={() => setActiveTab('guardian')}
-            className={`py-3 px-4 text-xs font-bold border-b-2 transition-colors flex items-center gap-1.5 ${
+            onClick={() => handleTabClick('guardian')}
+            className={`py-3 px-4 text-xs font-bold border-b-2 transition-colors flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'guardian'
                 ? 'border-indigo-600 text-indigo-600'
                 : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -173,12 +320,12 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
                   <input
                     type="text"
                     name="firstName"
-                    required
                     placeholder="e.g. Liam"
                     value={formData.firstName}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    className={`w-full px-3 py-2 text-sm border ${errors.firstName ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none`}
                   />
+                  {errors.firstName && <p className="text-[11px] text-rose-500 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.firstName}</p>}
                 </div>
 
                 <div>
@@ -188,12 +335,12 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
                   <input
                     type="text"
                     name="lastName"
-                    required
                     placeholder="e.g. Sterling"
                     value={formData.lastName}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    className={`w-full px-3 py-2 text-sm border ${errors.lastName ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none`}
                   />
+                  {errors.lastName && <p className="text-[11px] text-rose-500 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.lastName}</p>}
                 </div>
               </div>
 
@@ -208,6 +355,7 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
                     onChange={handleChange}
                     className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"
                   >
+                    <option value="">Select Gender</option>
                     <option value="Male">Male</option>
                     <option value="Female">Female</option>
                     <option value="Other">Other</option>
@@ -216,15 +364,16 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Date of Birth
+                    Date of Birth (DOB) *
                   </label>
                   <input
                     type="date"
                     name="dob"
                     value={formData.dob}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    className={`w-full px-3 py-2 text-sm border ${errors.dob ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none`}
                   />
+                  {errors.dob && <p className="text-[11px] text-rose-500 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.dob}</p>}
                 </div>
 
                 <div>
@@ -237,6 +386,7 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
                     onChange={handleChange}
                     className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"
                   >
+                    <option value="">Select Blood Group</option>
                     <option value="A+">A+</option>
                     <option value="A-">A-</option>
                     <option value="B+">B+</option>
@@ -286,12 +436,14 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
                     name="grade"
                     value={formData.grade}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white font-medium"
+                    className={`w-full px-3 py-2 text-sm border ${errors.grade ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white font-medium`}
                   >
+                    <option value="">Select Grade / Class *</option>
                     {grades.map(g => (
                       <option key={g} value={g}>{g}</option>
                     ))}
                   </select>
+                  {errors.grade && <p className="text-[11px] text-rose-500 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.grade}</p>}
                 </div>
 
                 <div>
@@ -302,42 +454,46 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
                     name="section"
                     value={formData.section}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white font-medium"
+                    className={`w-full px-3 py-2 text-sm border ${errors.section ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white font-medium`}
                   >
+                    <option value="">Select Section *</option>
                     <option value="A">Section A</option>
                     <option value="B">Section B</option>
                     <option value="C">Section C</option>
                     <option value="D">Section D</option>
                   </select>
+                  {errors.section && <p className="text-[11px] text-rose-500 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.section}</p>}
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Roll Number *
+                  <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                    <span>Roll Number *</span>
+                    <span className="text-[10px] text-indigo-600 font-semibold bg-indigo-50 px-1.5 py-0.5 rounded-md">Auto-Incremented</span>
                   </label>
                   <input
                     type="text"
                     name="rollNumber"
-                    required
                     placeholder="e.g. 101"
                     value={formData.rollNumber}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    className={`w-full px-3 py-2 text-sm border ${errors.rollNumber ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none font-semibold text-slate-800`}
                   />
+                  {errors.rollNumber && <p className="text-[11px] text-rose-500 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.rollNumber}</p>}
                 </div>
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Admission Date
+                  Admission Date *
                 </label>
                 <input
                   type="date"
                   name="admissionDate"
                   value={formData.admissionDate}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  className={`w-full px-3 py-2 text-sm border ${errors.admissionDate ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none`}
                 />
+                {errors.admissionDate && <p className="text-[11px] text-rose-500 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.admissionDate}</p>}
               </div>
 
               <div>
@@ -367,12 +523,12 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
                   <input
                     type="text"
                     name="guardianName"
-                    required
                     placeholder="e.g. Robert Taylor"
                     value={formData.guardianName}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    className={`w-full px-3 py-2 text-sm border ${errors.guardianName ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none`}
                   />
+                  {errors.guardianName && <p className="text-[11px] text-rose-500 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.guardianName}</p>}
                 </div>
 
                 <div>
@@ -385,6 +541,7 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
                     onChange={handleChange}
                     className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"
                   >
+                    <option value="">Select Relationship</option>
                     <option value="Father">Father</option>
                     <option value="Mother">Mother</option>
                     <option value="Parents">Both Parents</option>
@@ -402,12 +559,12 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
                   <input
                     type="text"
                     name="guardianPhone"
-                    required
-                    placeholder="+1 (555) 000-0000"
+                    placeholder="e.g. +1 (555) 234-5678"
                     value={formData.guardianPhone}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    className={`w-full px-3 py-2 text-sm border ${errors.guardianPhone ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none`}
                   />
+                  {errors.guardianPhone && <p className="text-[11px] text-rose-500 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.guardianPhone}</p>}
                 </div>
 
                 <div>
@@ -417,7 +574,7 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
                   <input
                     type="email"
                     name="guardianEmail"
-                    placeholder="parent@example.com"
+                    placeholder="e.g. parent@example.com"
                     value={formData.guardianEmail}
                     onChange={handleChange}
                     className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
@@ -432,7 +589,7 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
                 <input
                   type="text"
                   name="address"
-                  placeholder="Street address, City, Zip"
+                  placeholder="Street address, City, State, Zip"
                   value={formData.address}
                   onChange={handleChange}
                   className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
@@ -460,7 +617,7 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl text-xs font-semibold transition-colors"
+              className="px-4 py-2 border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
             >
               Cancel
             </button>
@@ -469,18 +626,15 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
               {activeTab !== 'guardian' ? (
                 <button
                   type="button"
-                  onClick={() => {
-                    if (activeTab === 'personal') setActiveTab('academic');
-                    else if (activeTab === 'academic') setActiveTab('guardian');
-                  }}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-semibold transition-colors"
+                  onClick={handleNextStep}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-semibold transition-colors cursor-pointer"
                 >
                   Next Step →
                 </button>
               ) : (
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-100 transition-all flex items-center gap-1.5"
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-100 transition-all flex items-center gap-1.5 cursor-pointer"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>{studentToEdit ? 'Save Changes' : 'Complete Enrollment'}</span>
