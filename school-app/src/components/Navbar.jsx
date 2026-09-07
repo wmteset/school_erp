@@ -34,6 +34,21 @@ export const Navbar = ({ onOpenNotifications, onOpenQuickAction, onOpenGlobalSea
 
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
+  const dateInputRef = useRef(null);
+
+  const handleOpenDatePicker = () => {
+    if (dateInputRef.current) {
+      try {
+        if (typeof dateInputRef.current.showPicker === 'function') {
+          dateInputRef.current.showPicker();
+        } else {
+          dateInputRef.current.focus();
+        }
+      } catch {
+        dateInputRef.current.focus();
+      }
+    }
+  };
 
   // Click outside listener to close dropdown
   useEffect(() => {
@@ -106,28 +121,34 @@ export const Navbar = ({ onOpenNotifications, onOpenQuickAction, onOpenGlobalSea
         {/* Right: Date, Quick Action, Notifications & User Profile */}
         <div className="flex items-center gap-2 sm:gap-3">
           
-          {/* Dynamic Selectable Datepicker Tag */}
-          <div className="relative flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100/90 hover:bg-slate-200/70 border border-slate-200/80 rounded-xl text-xs text-slate-700 font-medium transition-colors group cursor-pointer shadow-2xs">
-            <Calendar className="w-3.5 h-3.5 text-indigo-600 shrink-0 pointer-events-none" />
-            <div className="flex items-center gap-1 pointer-events-none">
-              <span className="font-semibold text-slate-500 hidden lg:inline">
-                {selectedDate === todayStr ? 'Today:' : 'Date:'}
-              </span>
-              <span className="font-bold text-slate-800">
-                {formatDate(selectedDate)}
-              </span>
-            </div>
-            {/* HTML5 Native Datepicker overlay */}
+          {/* Dynamic Selectable Datepicker (Future dates disabled, opens picker on click) */}
+          <div
+            onClick={handleOpenDatePicker}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200/80 border border-slate-200/90 rounded-xl text-xs text-slate-700 font-medium transition-all cursor-pointer shadow-2xs group"
+          >
+            <Calendar className="w-3.5 h-3.5 text-indigo-600 shrink-0 group-hover:scale-110 transition-transform" />
+            <span className="font-semibold text-slate-500 hidden lg:inline select-none">
+              {selectedDate === todayStr ? 'Today:' : 'Date:'}
+            </span>
             <input
+              ref={dateInputRef}
               type="date"
+              max={todayStr}
               value={selectedDate}
               onChange={(e) => {
-                if (e.target.value) {
-                  setSelectedDate(e.target.value);
+                const val = e.target.value;
+                if (val) {
+                  // Ensure future dates cannot be selected
+                  if (val > todayStr) {
+                    setSelectedDate(todayStr);
+                  } else {
+                    setSelectedDate(val);
+                  }
                 }
               }}
-              aria-label="Select active date"
-              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+              onClick={(e) => e.stopPropagation()}
+              className="bg-transparent text-xs font-bold text-slate-800 border-none outline-none cursor-pointer focus:ring-0 p-0 font-sans"
+              title="Click to choose a date (past dates allowed, future disabled)"
             />
             {selectedDate !== todayStr && (
               <button
@@ -136,8 +157,8 @@ export const Navbar = ({ onOpenNotifications, onOpenQuickAction, onOpenGlobalSea
                   e.stopPropagation();
                   setSelectedDate(todayStr);
                 }}
-                className="relative z-20 ml-1 px-1.5 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold rounded-md transition-colors shadow-2xs cursor-pointer"
-                title="Reset date to today"
+                className="ml-0.5 px-1.5 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold rounded-md transition-colors shadow-2xs cursor-pointer"
+                title="Reset back to today"
               >
                 Today
               </button>

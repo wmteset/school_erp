@@ -71,11 +71,14 @@ export const AttendanceView = () => {
     }
   }, [selectedDate, activeMode, leaveRequests, staff]);
 
-  // Date Navigation
+  // Date Navigation (bounded so it cannot navigate to future dates)
   const changeDateBy = (offset) => {
     const current = new Date(selectedDate + 'T00:00:00');
     current.setDate(current.getDate() + offset);
-    setSelectedDate(current.toISOString().split('T')[0]);
+    const newDateStr = current.toISOString().split('T')[0];
+    if (newDateStr <= todayStr) {
+      setSelectedDate(newDateStr);
+    }
   };
 
   // Filtered Students
@@ -291,16 +294,28 @@ export const AttendanceView = () => {
               <Calendar className="w-4 h-4 text-indigo-600" />
               <input
                 type="date"
+                max={todayStr}
                 value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val) {
+                    if (val > todayStr) setSelectedDate(todayStr);
+                    else setSelectedDate(val);
+                  }
+                }}
                 className="text-xs font-bold text-slate-800 bg-transparent focus:outline-none cursor-pointer"
               />
             </div>
 
             <button
               onClick={() => changeDateBy(1)}
-              className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition-colors cursor-pointer"
-              title="Next Day"
+              disabled={selectedDate >= todayStr}
+              className={`p-2 border rounded-xl transition-colors ${
+                selectedDate >= todayStr
+                  ? 'border-slate-100 text-slate-300 cursor-not-allowed bg-slate-50/50'
+                  : 'border-slate-200 hover:bg-slate-50 text-slate-600 cursor-pointer'
+              }`}
+              title={selectedDate >= todayStr ? 'Future dates disabled' : 'Next Day'}
             >
               <ChevronRight className="w-4 h-4" />
             </button>

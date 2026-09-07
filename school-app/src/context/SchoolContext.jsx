@@ -172,8 +172,22 @@ export const SchoolProvider = ({ children }) => {
   const [attendance, setAttendance] = useState(INITIAL_ATTENDANCE);
   const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
 
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [selectedDateState, setSelectedDateState] = useState(() => new Date().toISOString().split('T')[0]);
   const [searchQuery, setSearchQuery] = useState('');
+
+  const setSelectedDate = useCallback((dateVal) => {
+    const today = new Date().toISOString().split('T')[0];
+    if (typeof dateVal === 'function') {
+      setSelectedDateState(prev => {
+        const nextVal = dateVal(prev);
+        return nextVal > today ? today : nextVal;
+      });
+    } else {
+      setSelectedDateState(dateVal > today ? today : dateVal);
+    }
+  }, []);
+
+  const selectedDate = selectedDateState;
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   const [quickActionOpen, setQuickActionOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
