@@ -31,6 +31,13 @@ export class StudentsController {
     return this.studentsService.findAll(filterDto);
   }
 
+  @Get('next-roll-number')
+  @ApiOperation({ summary: 'Get next auto-incremented student roll number based on last registered roll number' })
+  @ApiResponse({ status: 200, description: 'Next roll number payload' })
+  async getNextRollNumber() {
+    return this.studentsService.getNextRollNumber();
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get 360-degree student profile by ID' })
   @ApiResponse({ status: 200, description: 'Student profile details' })

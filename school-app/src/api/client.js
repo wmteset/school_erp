@@ -108,6 +108,7 @@ export const api = {
       const query = new URLSearchParams(params).toString();
       return request(`/students${query ? `?${query}` : ''}`);
     },
+    getNextRollNumber: () => request('/students/next-roll-number'),
     getById: (id) => request(`/students/${id}`),
     create: (data) => request('/students', { method: 'POST', body: JSON.stringify(data) }),
     update: (id, data) => request(`/students/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),

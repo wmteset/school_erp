@@ -146,20 +146,12 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
 
     if (name === 'role') {
       const normRole = normalizeRole(value);
-      const validDepts = getDepartmentsForRole(normRole);
       
-      setFormData(prev => {
-        let nextDept = prev.department;
-        if (!validDepts.includes(nextDept)) {
-          nextDept = validDepts.length > 0 ? validDepts[0] : '';
-        }
-
-        return {
-          ...prev,
-          role: normRole,
-          department: nextDept
-        };
-      });
+      setFormData(prev => ({
+        ...prev,
+        role: normRole,
+        department: '', // always reset to empty on role select/change
+      }));
       return;
     }
 

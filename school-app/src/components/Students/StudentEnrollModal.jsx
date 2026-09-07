@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { X, GraduationCap, User, Phone, MapPin, Heart, Bus, Sparkles, AlertCircle } from 'lucide-react';
+import { X, GraduationCap, User, Phone, MapPin, Heart, Bus, Sparkles, AlertCircle, Hash } from 'lucide-react';
 import { useSchool } from '../../context/SchoolContext';
 import { ImageUploader } from '../Common/ImageUploader';
+import { api } from '../../api/client';
 
 export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) => {
-  const { addStudent, updateStudent, classes, showToast } = useSchool();
+  const { addStudent, updateStudent, students = [], showToast } = useSchool();
 
   const emptyStudentForm = {
     firstName: '',
@@ -31,6 +32,15 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
   const [activeTab, setActiveTab] = useState('personal');
   const [errors, setErrors] = useState({});
 
+  const calculateNextRollNumber = () => {
+    if (!students || students.length === 0) return '101';
+    const numericRolls = students
+      .map(s => parseInt(s.rollNumber, 10))
+      .filter(num => !isNaN(num) && num > 0);
+    const maxRoll = numericRolls.length > 0 ? Math.max(...numericRolls) : 100;
+    return String(maxRoll + 1);
+  };
+
   useEffect(() => {
     setErrors({});
     if (studentToEdit) {
@@ -55,9 +65,27 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
         avatar: studentToEdit.avatar || ''
       });
     } else {
-      setFormData(emptyStudentForm);
+      const initialRoll = calculateNextRollNumber();
+      setFormData({
+        ...emptyStudentForm,
+        rollNumber: initialRoll,
+      });
+
+      // Synchronize with backend API for exact database count
+      api.students.getNextRollNumber()
+        .then(res => {
+          if (res?.nextRollNumber) {
+            setFormData(prev => ({
+              ...prev,
+              rollNumber: res.nextRollNumber,
+            }));
+          }
+        })
+        .catch(() => {
+          // Context fallback already set
+        });
     }
-  }, [studentToEdit, isOpen]);
+  }, [studentToEdit, isOpen, students]);
 
   if (!isOpen) return null;
 
@@ -438,8 +466,9 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Roll Number *
+                  <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                    <span>Roll Number *</span>
+                    <span className="text-[10px] text-indigo-600 font-semibold bg-indigo-50 px-1.5 py-0.5 rounded-md">Auto-Incremented</span>
                   </label>
                   <input
                     type="text"
@@ -447,7 +476,7 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
                     placeholder="e.g. 101"
                     value={formData.rollNumber}
                     onChange={handleChange}
-                    className={`w-full px-3 py-2 text-sm border ${errors.rollNumber ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none`}
+                    className={`w-full px-3 py-2 text-sm border ${errors.rollNumber ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none font-semibold text-slate-800`}
                   />
                   {errors.rollNumber && <p className="text-[11px] text-rose-500 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.rollNumber}</p>}
                 </div>
