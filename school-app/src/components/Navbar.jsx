@@ -16,6 +16,7 @@ import {
   Building
 } from 'lucide-react';
 import { useSchool } from '../context/SchoolContext';
+import { formatDate } from '../utils/helpers';
 
 export const Navbar = ({ onOpenNotifications, onOpenQuickAction, onOpenGlobalSearch }) => {
   const {
@@ -24,11 +25,30 @@ export const Navbar = ({ onOpenNotifications, onOpenQuickAction, onOpenGlobalSea
     currentUser,
     logout,
     notifications,
-    rolePermissions
+    rolePermissions,
+    selectedDate,
+    setSelectedDate
   } = useSchool();
+
+  const todayStr = new Date().toISOString().split('T')[0];
 
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
+  const dateInputRef = useRef(null);
+
+  const handleOpenDatePicker = () => {
+    if (dateInputRef.current) {
+      try {
+        if (typeof dateInputRef.current.showPicker === 'function') {
+          dateInputRef.current.showPicker();
+        } else {
+          dateInputRef.current.focus();
+        }
+      } catch {
+        dateInputRef.current.focus();
+      }
+    }
+  };
 
   // Click outside listener to close dropdown
   useEffect(() => {
@@ -101,10 +121,48 @@ export const Navbar = ({ onOpenNotifications, onOpenQuickAction, onOpenGlobalSea
         {/* Right: Date, Quick Action, Notifications & User Profile */}
         <div className="flex items-center gap-2 sm:gap-3">
           
-          {/* Today's Date Indicator */}
-          <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100/70 border border-slate-200/60 rounded-xl text-xs text-slate-600 font-medium">
-            <Calendar className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Today: Sep 2, 2026</span>
+          {/* Dynamic Selectable Datepicker (Future dates disabled, opens picker on click) */}
+          <div
+            onClick={handleOpenDatePicker}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200/80 border border-slate-200/90 rounded-xl text-xs text-slate-700 font-medium transition-all cursor-pointer shadow-2xs group"
+          >
+            <Calendar className="w-3.5 h-3.5 text-indigo-600 shrink-0 group-hover:scale-110 transition-transform" />
+            <span className="font-semibold text-slate-500 hidden lg:inline select-none">
+              {selectedDate === todayStr ? 'Today:' : 'Date:'}
+            </span>
+            <input
+              ref={dateInputRef}
+              type="date"
+              max={todayStr}
+              value={selectedDate}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val) {
+                  // Ensure future dates cannot be selected
+                  if (val > todayStr) {
+                    setSelectedDate(todayStr);
+                  } else {
+                    setSelectedDate(val);
+                  }
+                }
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-transparent text-xs font-bold text-slate-800 border-none outline-none cursor-pointer focus:ring-0 p-0 font-sans"
+              title="Click to choose a date (past dates allowed, future disabled)"
+            />
+            {selectedDate !== todayStr && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedDate(todayStr);
+                }}
+                className="ml-0.5 px-1.5 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold rounded-md transition-colors shadow-2xs cursor-pointer"
+                title="Reset back to today"
+              >
+                Today
+              </button>
+            )}
           </div>
 
           {/* Quick Action Button */}

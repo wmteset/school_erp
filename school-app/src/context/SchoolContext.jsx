@@ -71,8 +71,8 @@ export const ROLE_PERMISSIONS = {
     label: 'Teacher / Faculty',
     title: 'Faculty / Class Coordinator',
     badge: 'Faculty Classroom Access',
-    description: 'Daily roll call, student directory, class timetable, clubs & leave requests',
-    allowedTabs: ['dashboard', 'students', 'attendance', 'activities', 'classes', 'leaves'],
+    description: 'Daily roll call, student directory, class timetable, and student clubs',
+    allowedTabs: ['dashboard', 'students', 'attendance', 'activities', 'classes'],
     permissions: {
       canEnrollStudents: false,
       canEditStudents: false,
@@ -84,7 +84,7 @@ export const ROLE_PERMISSIONS = {
       canMarkAttendance: true,
       canGeneratePayroll: false,
       canDisbursePayroll: false,
-      canApplyLeave: true,
+      canApplyLeave: false,
       canReviewLeave: false,
       canManageActivities: true,
       canManageClasses: false,
@@ -172,8 +172,22 @@ export const SchoolProvider = ({ children }) => {
   const [attendance, setAttendance] = useState(INITIAL_ATTENDANCE);
   const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
 
-  const [selectedDate, setSelectedDate] = useState('2026-09-02');
+  const [selectedDateState, setSelectedDateState] = useState(() => new Date().toISOString().split('T')[0]);
   const [searchQuery, setSearchQuery] = useState('');
+
+  const setSelectedDate = useCallback((dateVal) => {
+    const today = new Date().toISOString().split('T')[0];
+    if (typeof dateVal === 'function') {
+      setSelectedDateState(prev => {
+        const nextVal = dateVal(prev);
+        return nextVal > today ? today : nextVal;
+      });
+    } else {
+      setSelectedDateState(dateVal > today ? today : dateVal);
+    }
+  }, []);
+
+  const selectedDate = selectedDateState;
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   const [quickActionOpen, setQuickActionOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
@@ -1123,20 +1137,20 @@ export const SchoolProvider = ({ children }) => {
   const totalStudentsCount = students.length;
   const totalStaffCount = staff.length;
   
-  // Today's student attendance computation
+  // Selected date's student attendance computation
   const todayStudentAttMap = attendance[selectedDate]?.students || {};
   const todayMarkedStudents = Object.values(todayStudentAttMap);
   const presentStudentsToday = todayMarkedStudents.filter(s => s.status === 'P' || s.status === 'L').length;
-  const studentAttendanceRateToday = todayMarkedStudents.length > 0 
-    ? Math.round((presentStudentsToday / todayMarkedStudents.length) * 100) 
-    : 94;
+  const studentAttendanceRateToday = students.length > 0 
+    ? (todayMarkedStudents.length > 0 ? Math.round((presentStudentsToday / students.length) * 100) : 0)
+    : 100;
 
-  // Today's staff attendance computation
+  // Selected date's staff attendance computation
   const todayStaffAttMap = attendance[selectedDate]?.staff || {};
   const todayMarkedStaff = Object.values(todayStaffAttMap);
   const presentStaffToday = todayMarkedStaff.filter(s => s.status === 'P' || s.status === 'L' || s.status === 'E').length;
-  const staffAttendanceRateToday = todayMarkedStaff.length > 0
-    ? Math.round((presentStaffToday / todayMarkedStaff.length) * 100)
+  const staffAttendanceRateToday = staff.length > 0
+    ? (todayMarkedStaff.length > 0 ? Math.round((presentStaffToday / staff.length) * 100) : 0)
     : 100;
 
   // Pending leaves count
