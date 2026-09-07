@@ -6,55 +6,56 @@ import { ImageUploader } from '../Common/ImageUploader';
 export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) => {
   const { addStudent, updateStudent, classes, showToast } = useSchool();
 
-  const [formData, setFormData] = useState({
+  const emptyStudentForm = {
     firstName: '',
     lastName: '',
-    gender: 'Male',
-    dob: '2010-01-01',
-    bloodGroup: 'O+',
-    grade: 'Grade 10',
-    section: 'A',
-    rollNumber: '101',
-    admissionDate: new Date().toISOString().split('T')[0],
+    gender: '',
+    dob: '',
+    bloodGroup: '',
+    grade: '',
+    section: '',
+    rollNumber: '',
+    admissionDate: '',
     status: 'Active',
     guardianName: '',
-    guardianRelation: 'Father',
+    guardianRelation: '',
     guardianPhone: '',
     guardianEmail: '',
     address: '',
     medicalNotes: '',
-    transportRoute: 'Bus Route #1',
-    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=250&q=80'
-  });
+    transportRoute: '',
+    avatar: ''
+  };
 
+  const [formData, setFormData] = useState(emptyStudentForm);
   const [activeTab, setActiveTab] = useState('personal');
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
     setErrors({});
     if (studentToEdit) {
-      setFormData(studentToEdit);
-    } else {
       setFormData({
-        firstName: '',
-        lastName: '',
-        gender: 'Male',
-        dob: '2010-05-15',
-        bloodGroup: 'O+',
-        grade: 'Grade 10',
-        section: 'A',
-        rollNumber: String(Math.floor(100 + Math.random() * 900)),
-        admissionDate: new Date().toISOString().split('T')[0],
-        status: 'Active',
-        guardianName: '',
-        guardianRelation: 'Father',
-        guardianPhone: '+1 (555) 000-0000',
-        guardianEmail: '',
-        address: '123 Academic Way',
-        medicalNotes: 'None',
-        transportRoute: 'Bus Route #1',
-        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=250&q=80'
+        firstName: studentToEdit.firstName || '',
+        lastName: studentToEdit.lastName || '',
+        gender: studentToEdit.gender || 'Male',
+        dob: studentToEdit.dob || '',
+        bloodGroup: studentToEdit.bloodGroup || 'O+',
+        grade: studentToEdit.grade || '',
+        section: studentToEdit.section || 'A',
+        rollNumber: studentToEdit.rollNumber || '',
+        admissionDate: studentToEdit.admissionDate || '',
+        status: studentToEdit.status || 'Active',
+        guardianName: studentToEdit.guardianName || '',
+        guardianRelation: studentToEdit.guardianRelation || 'Father',
+        guardianPhone: studentToEdit.guardianPhone || '',
+        guardianEmail: studentToEdit.guardianEmail || '',
+        address: studentToEdit.address || '',
+        medicalNotes: studentToEdit.medicalNotes || '',
+        transportRoute: studentToEdit.transportRoute || '',
+        avatar: studentToEdit.avatar || ''
       });
+    } else {
+      setFormData(emptyStudentForm);
     }
   }, [studentToEdit, isOpen]);
 
@@ -180,11 +181,19 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
       return;
     }
 
+    const payload = {
+      ...formData,
+      gender: formData.gender || 'Male',
+      bloodGroup: formData.bloodGroup || 'O+',
+      guardianRelation: formData.guardianRelation || 'Father',
+      status: formData.status || 'Active'
+    };
+
     try {
       if (studentToEdit) {
-        await updateStudent(studentToEdit.id, formData);
+        await updateStudent(studentToEdit.id, payload);
       } else {
-        await addStudent(formData);
+        await addStudent(payload);
       }
       onClose();
     } catch (err) {
@@ -318,6 +327,7 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
                     onChange={handleChange}
                     className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"
                   >
+                    <option value="">Select Gender</option>
                     <option value="Male">Male</option>
                     <option value="Female">Female</option>
                     <option value="Other">Other</option>
@@ -348,6 +358,7 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
                     onChange={handleChange}
                     className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"
                   >
+                    <option value="">Select Blood Group</option>
                     <option value="A+">A+</option>
                     <option value="A-">A-</option>
                     <option value="B+">B+</option>
@@ -399,6 +410,7 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
                     onChange={handleChange}
                     className={`w-full px-3 py-2 text-sm border ${errors.grade ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white font-medium`}
                   >
+                    <option value="">Select Grade / Class *</option>
                     {grades.map(g => (
                       <option key={g} value={g}>{g}</option>
                     ))}
@@ -416,6 +428,7 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
                     onChange={handleChange}
                     className={`w-full px-3 py-2 text-sm border ${errors.section ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white font-medium`}
                   >
+                    <option value="">Select Section *</option>
                     <option value="A">Section A</option>
                     <option value="B">Section B</option>
                     <option value="C">Section C</option>
@@ -499,6 +512,7 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
                     onChange={handleChange}
                     className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"
                   >
+                    <option value="">Select Relationship</option>
                     <option value="Father">Father</option>
                     <option value="Mother">Mother</option>
                     <option value="Parents">Both Parents</option>
@@ -516,7 +530,7 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
                   <input
                     type="text"
                     name="guardianPhone"
-                    placeholder="+1 (555) 000-0000"
+                    placeholder="e.g. +1 (555) 234-5678"
                     value={formData.guardianPhone}
                     onChange={handleChange}
                     className={`w-full px-3 py-2 text-sm border ${errors.guardianPhone ? 'border-rose-400 bg-rose-50/20' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none`}
@@ -531,7 +545,7 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
                   <input
                     type="email"
                     name="guardianEmail"
-                    placeholder="parent@example.com"
+                    placeholder="e.g. parent@example.com"
                     value={formData.guardianEmail}
                     onChange={handleChange}
                     className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
@@ -546,7 +560,7 @@ export const StudentEnrollModal = ({ isOpen, onClose, studentToEdit = null }) =>
                 <input
                   type="text"
                   name="address"
-                  placeholder="Street address, City, Zip"
+                  placeholder="Street address, City, State, Zip"
                   value={formData.address}
                   onChange={handleChange}
                   className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
