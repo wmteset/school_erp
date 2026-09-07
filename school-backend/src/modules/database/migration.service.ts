@@ -11,8 +11,51 @@ export interface ColumnDefinition {
 export interface TableMigrationSpec {
   tableName: string;
   columns: ColumnDefinition[];
-  deprecatedColumns?: string[]; // Columns eligible for safe deletion only if 100% empty
+  deprecatedColumns?: string[]; // Columns eligible for safe deletion only if 100% empty (Zero Data Loss)
 }
+
+/**
+ * Semantic Alias Groups: Dictionary of column aliases representing the same semantic entity.
+ * Prevents redundant duplicate columns from ever being added with different names.
+ */
+export const SEMANTIC_COLUMN_ALIAS_GROUPS: string[][] = [
+  // Date of Birth
+  ['dob', 'dateofbirth', 'birthdate', 'date_of_birth', 'birth_date', 'birthday', 'studentdob'],
+  // Guardian / Parent Name
+  ['guardianname', 'parentname', 'fathername', 'mothername', 'guardian_name', 'parent_name', 'father_name', 'mother_name'],
+  // Guardian / Parent Phone / Emergency Contact
+  ['guardianphone', 'parentphone', 'fatherphone', 'motherphone', 'guardian_phone', 'parent_phone'],
+  // Guardian / Parent Email
+  ['guardianemail', 'parentemail', 'fatheremail', 'motheremail', 'guardian_email', 'parent_email'],
+  // Class Teacher
+  ['classteachername', 'classteacher', 'class_teacher', 'class_teacher_name', 'teachername', 'mentorname'],
+  // Faculty Advisor / Mentor
+  ['facultyadvisor', 'mentorteacher', 'mentorrole', 'mentor', 'advisor', 'faculty_advisor', 'mentor_teacher'],
+  // Room Number
+  ['roomnumber', 'room', 'roomlocation', 'room_number', 'room_location', 'classroom'],
+  // Student Count / Total Students
+  ['totalstudents', 'studentcount', 'studentscount', 'total_students', 'student_count', 'enrollmentcount'],
+  // Phone numbers
+  ['phone', 'phonenumber', 'contactnumber', 'mobilenumber', 'mobile', 'phone_number', 'contact_number'],
+  // Email address
+  ['email', 'emailaddress', 'mail', 'emailid', 'email_address', 'email_id'],
+  // Base Salary
+  ['salarybasesalary', 'basesalary', 'basicsalary', 'base_salary', 'basic_salary'],
+  // Joining / Hire Date
+  ['joiningdate', 'dateofjoining', 'hiredate', 'joining_date', 'hire_date', 'startdate', 'start_date'],
+  // Schedule Summary
+  ['schedulesummary', 'schedule', 'meetingschedule', 'schedule_summary', 'meeting_schedule'],
+  // Emergency Contact
+  ['emergencycontact', 'emergency_contact', 'emergencyphone', 'emergency_phone'],
+  // Medical notes
+  ['medicalnotes', 'medical_notes', 'healthnotes', 'medicalinfo', 'health_notes'],
+  // Admission date
+  ['admissiondate', 'admission_date', 'dateofadmission', 'enrollmentdate', 'enrollment_date'],
+  // Qualification
+  ['qualification', 'educationalqualification', 'degree', 'qualifications'],
+  // Designation & Role
+  ['designation', 'jobdesignation', 'job_designation', 'positiontitle'],
+];
 
 @Injectable()
 export class MigrationService implements OnApplicationBootstrap {
@@ -21,8 +64,55 @@ export class MigrationService implements OnApplicationBootstrap {
   constructor(private readonly dataSource: DataSource) {}
 
   async onApplicationBootstrap() {
-    this.logger.log('Starting automated migration & schema integrity verification...');
+    this.logger.log('Starting automated migration & schema integrity verification with Anti-Redundancy Rules...');
     await this.runAllMigrations();
+  }
+
+  /**
+   * Helper: Normalizes a column identifier to lowercased alphanumeric characters only.
+   */
+  public normalizeColumnName(name: string): string {
+    return name.toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+
+  /**
+   * Anti-Redundancy & Semantic Duplicate Column Detector:
+   * Analyzes whether a proposed column name is already represented by an existing column
+   * under a different alias, casing, or format on the target table.
+   */
+  public findSemanticDuplicate(
+    tableName: string,
+    proposedColName: string,
+    existingColumns: string[],
+  ): { isDuplicate: boolean; existingMatch?: string; reason?: string } {
+    const normalizedProposed = this.normalizeColumnName(proposedColName);
+
+    for (const existingCol of existingColumns) {
+      const normalizedExisting = this.normalizeColumnName(existingCol);
+
+      // 1. Format/Casing Equivalence (e.g. date_of_birth vs dateOfBirth)
+      if (normalizedProposed === normalizedExisting && proposedColName !== existingCol) {
+        return {
+          isDuplicate: true,
+          existingMatch: existingCol,
+          reason: `Formatting/casing equivalent of existing column '${existingCol}'`,
+        };
+      }
+
+      // 2. Semantic Synonym / Alias Equivalence (e.g. dateOfBirth vs dob)
+      for (const group of SEMANTIC_COLUMN_ALIAS_GROUPS) {
+        const normalizedGroup = group.map(g => this.normalizeColumnName(g));
+        if (normalizedGroup.includes(normalizedProposed) && normalizedGroup.includes(normalizedExisting)) {
+          return {
+            isDuplicate: true,
+            existingMatch: existingCol,
+            reason: `Semantic synonym/alias of existing column '${existingCol}'`,
+          };
+        }
+      }
+    }
+
+    return { isDuplicate: false };
   }
 
   /**
@@ -44,9 +134,11 @@ export class MigrationService implements OnApplicationBootstrap {
           { name: 'id', type: 'character varying' },
           { name: 'title', type: 'character varying' },
           { name: 'message', type: 'text' },
+          { name: 'type', type: 'character varying', default: "'system'" },
           { name: 'category', type: 'character varying', default: "'System'" },
           { name: 'time', type: 'character varying' },
           { name: 'read', type: 'boolean', default: 'false' },
+          { name: 'linkTab', type: 'character varying' },
           { name: 'priority', type: 'character varying', default: "'normal'" },
         ],
       },
@@ -61,7 +153,7 @@ export class MigrationService implements OnApplicationBootstrap {
           { name: 'name', type: 'character varying' },
           { name: 'role', type: 'character varying', default: "'teacher'" },
           { name: 'title', type: 'character varying' },
-          { name: 'department', type: 'character varying' },
+          { name: 'department', type: 'character varying', default: "'General'" },
           { name: 'staffId', type: 'character varying' },
           { name: 'avatar', type: 'text' },
           { name: 'isActive', type: 'boolean', default: 'true' },
@@ -112,7 +204,7 @@ export class MigrationService implements OnApplicationBootstrap {
         ],
       },
 
-      // 3. Students Table
+      // 3. Students Table (dob holds Date of Birth; dateOfBirth is recognized as duplicate alias)
       {
         tableName: 'students',
         columns: [
@@ -120,22 +212,30 @@ export class MigrationService implements OnApplicationBootstrap {
           { name: 'firstName', type: 'character varying' },
           { name: 'lastName', type: 'character varying' },
           { name: 'gender', type: 'character varying', default: "'Male'" },
-          { name: 'grade', type: 'character varying' },
-          { name: 'section', type: 'character varying' },
-          { name: 'rollNumber', type: 'character varying', default: "'01'" },
-          { name: 'dateOfBirth', type: 'character varying' },
-          { name: 'admissionDate', type: 'character varying' },
+          { name: 'dob', type: 'character varying' },
           { name: 'bloodGroup', type: 'character varying', default: "'O+'" },
+          { name: 'grade', type: 'character varying' },
+          { name: 'section', type: 'character varying', default: "'A'" },
+          { name: 'rollNumber', type: 'character varying' },
+          { name: 'admissionDate', type: 'character varying', default: "'2026-09-02'" },
           { name: 'status', type: 'character varying', default: "'Active'" },
           { name: 'avatar', type: 'text' },
-          { name: 'parentName', type: 'character varying' },
-          { name: 'parentPhone', type: 'character varying' },
-          { name: 'parentEmail', type: 'character varying' },
+          { name: 'guardianName', type: 'character varying' },
+          { name: 'guardianRelation', type: 'character varying', default: "'Father'" },
+          { name: 'guardianPhone', type: 'character varying' },
+          { name: 'guardianEmail', type: 'character varying' },
           { name: 'address', type: 'text' },
-          { name: 'emergencyContact', type: 'text' },
           { name: 'medicalNotes', type: 'text' },
-          { name: 'activities', type: 'jsonb', default: "'[]'::jsonb" },
-          { name: 'awards', type: 'jsonb', default: "'[]'::jsonb" },
+          { name: 'transportRoute', type: 'character varying' },
+          { name: 'activities', type: 'text' },
+          { name: 'awards', type: 'text' },
+        ],
+        deprecatedColumns: [
+          'dateOfBirth',
+          'parentName',
+          'parentPhone',
+          'parentEmail',
+          'emergencyContact',
         ],
       },
 
@@ -147,11 +247,10 @@ export class MigrationService implements OnApplicationBootstrap {
           { name: 'date', type: 'character varying' },
           { name: 'targetType', type: 'character varying' },
           { name: 'targetId', type: 'character varying' },
-          { name: 'status', type: 'character varying' },
-          { name: 'checkIn', type: 'character varying' },
-          { name: 'checkOut', type: 'character varying' },
-          { name: 'note', type: 'character varying' },
+          { name: 'status', type: 'character varying', default: "'P'" },
+          { name: 'note', type: 'text' },
         ],
+        deprecatedColumns: ['checkIn', 'checkOut'],
       },
 
       // 5. Leave Requests Table
@@ -180,19 +279,19 @@ export class MigrationService implements OnApplicationBootstrap {
         tableName: 'school_info',
         columns: [
           { name: 'id', type: 'integer' },
-          { name: 'name', type: 'character varying' },
-          { name: 'tagline', type: 'character varying' },
+          { name: 'name', type: 'character varying', default: "'Oakridge International Academy'" },
+          { name: 'tagline', type: 'character varying', default: "'Excellence in Education & Character Building'" },
           { name: 'headerSubtitle', type: 'character varying', default: "'CBSE & IB World School #04291'" },
           { name: 'affiliation', type: 'character varying', default: "'CBSE & IB World School #04291'" },
           { name: 'logo', type: 'text' },
           { name: 'established', type: 'integer', default: '1998' },
-          { name: 'email', type: 'character varying' },
-          { name: 'phone', type: 'character varying' },
-          { name: 'address', type: 'text' },
-          { name: 'website', type: 'character varying' },
+          { name: 'email', type: 'character varying', default: "'contact@oakridge-academy.edu'" },
+          { name: 'phone', type: 'character varying', default: "'+1 (555) 234-5678'" },
+          { name: 'address', type: 'text', default: "'742 Evergreen Academic Blvd, Education City, CA 90210'" },
+          { name: 'website', type: 'character varying', default: "'www.oakridge-academy.edu'" },
           { name: 'currency', type: 'character varying', default: "'$'" },
           { name: 'academicYear', type: 'character varying', default: "'2026-2027'" },
-          { name: 'principal', type: 'character varying' },
+          { name: 'principal', type: 'character varying', default: "'Dr. Arthur Pendelton'" },
           { name: 'themeColor', type: 'character varying', default: "'indigo'" },
         ],
       },
@@ -206,10 +305,8 @@ export class MigrationService implements OnApplicationBootstrap {
           { name: 'year', type: 'integer' },
           { name: 'disbursementDate', type: 'character varying' },
           { name: 'status', type: 'character varying', default: "'Draft'" },
-          { name: 'totalGross', type: 'double precision', default: '0' },
-          { name: 'totalDeductions', type: 'double precision', default: '0' },
-          { name: 'totalNet', type: 'double precision', default: '0' },
         ],
+        deprecatedColumns: ['totalGross', 'totalDeductions', 'totalNet'],
       },
       {
         tableName: 'staff_payroll_records',
@@ -224,17 +321,15 @@ export class MigrationService implements OnApplicationBootstrap {
           { name: 'hra', type: 'double precision', default: '0' },
           { name: 'transportAllowance', type: 'double precision', default: '0' },
           { name: 'specialAllowance', type: 'double precision', default: '0' },
-          { name: 'bonus', type: 'double precision', default: '0' },
-          { name: 'grossEarnings', type: 'double precision', default: '0' },
           { name: 'pfDeduction', type: 'double precision', default: '0' },
           { name: 'taxDeduction', type: 'double precision', default: '0' },
-          { name: 'unpaidLeaveDeduction', type: 'double precision', default: '0' },
+          { name: 'grossEarnings', type: 'double precision', default: '0' },
           { name: 'totalDeductions', type: 'double precision', default: '0' },
           { name: 'netSalary', type: 'double precision', default: '0' },
           { name: 'paymentStatus', type: 'character varying', default: "'Pending'" },
           { name: 'paymentMethod', type: 'character varying', default: "'Bank Transfer'" },
-          { name: 'transactionRef', type: 'character varying' },
           { name: 'paidDate', type: 'character varying' },
+          { name: 'transactionRef', type: 'character varying' },
         ],
       },
 
@@ -245,28 +340,31 @@ export class MigrationService implements OnApplicationBootstrap {
           { name: 'id', type: 'character varying' },
           { name: 'name', type: 'character varying' },
           { name: 'category', type: 'character varying' },
-          { name: 'mentorTeacher', type: 'character varying' },
-          { name: 'mentorRole', type: 'character varying' },
-          { name: 'description', type: 'text' },
+          { name: 'facultyAdvisor', type: 'character varying' },
           { name: 'meetingSchedule', type: 'character varying' },
-          { name: 'roomLocation', type: 'character varying' },
+          { name: 'room', type: 'character varying' },
+          { name: 'capacity', type: 'integer', default: '30' },
+          { name: 'description', type: 'text' },
           { name: 'badgeColor', type: 'character varying', default: "'indigo'" },
-          { name: 'enrolledStudents', type: 'jsonb', default: "'[]'::jsonb" },
-          { name: 'achievements', type: 'jsonb', default: "'[]'::jsonb" },
+          { name: 'enrolledStudents', type: 'text', default: "'[]'" },
+          { name: 'achievements', type: 'text', default: "'[]'" },
         ],
+        deprecatedColumns: ['mentorTeacher', 'mentorRole', 'roomLocation'],
       },
       {
         tableName: 'classes',
         columns: [
           { name: 'id', type: 'character varying' },
           { name: 'grade', type: 'character varying' },
-          { name: 'section', type: 'character varying' },
+          { name: 'section', type: 'character varying', default: "'A'" },
+          { name: 'classTeacherId', type: 'character varying' },
+          { name: 'classTeacherName', type: 'character varying' },
           { name: 'roomNumber', type: 'character varying' },
-          { name: 'classTeacher', type: 'character varying' },
-          { name: 'studentCount', type: 'integer', default: '0' },
-          { name: 'capacity', type: 'integer', default: '35' },
-          { name: 'schedule', type: 'jsonb', default: "'[]'::jsonb" },
+          { name: 'totalStudents', type: 'integer', default: '0' },
+          { name: 'subjects', type: 'text' },
+          { name: 'scheduleSummary', type: 'character varying' },
         ],
+        deprecatedColumns: ['classTeacher', 'studentCount', 'capacity', 'schedule'],
       },
     ];
 
@@ -286,8 +384,11 @@ export class MigrationService implements OnApplicationBootstrap {
   }
 
   /**
-   * Executes migration for a table with 3-Hit Retry Mechanism and Transactional Rollback.
-   * Ensures all newly added columns are NULLABLE so existing data is never corrupted.
+   * Executes migration for a table with:
+   * 1. 3-Hit Retry Mechanism and Transactional Rollback.
+   * 2. Anti-Redundancy & Semantic Duplicate Column Protection Rule.
+   * 3. Nullable-only safe column additions.
+   * 4. Safe Empty-Only Column Deletion (Zero Data Loss).
    */
   private async executeTableMigrationWithRetry(spec: TableMigrationSpec): Promise<boolean> {
     const migrationName = `sync_table_${spec.tableName}_schema`;
@@ -315,17 +416,30 @@ export class MigrationService implements OnApplicationBootstrap {
         // 2. Fetch existing columns from information_schema
         const existingColumns = await this.getExistingColumns(queryRunner, spec.tableName);
 
-        // 3. Auto-Add missing columns as NULLABLE
+        // 3. Auto-Add missing columns with Anti-Redundancy & Semantic Duplicate Check
         for (const col of spec.columns) {
-          if (!existingColumns.includes(col.name)) {
-            let addSql = `ALTER TABLE "${spec.tableName}" ADD COLUMN IF NOT EXISTS "${col.name}" ${col.type}`;
-            if (col.default !== undefined) {
-              addSql += ` DEFAULT ${col.default}`;
-            }
-            // Always NULLABLE for safe migration over existing rows
-            await queryRunner.query(addSql);
-            this.logger.log(`[Migration] Auto-added nullable column '${col.name}' to table '${spec.tableName}'`);
+          if (existingColumns.includes(col.name)) {
+            // Column already exists with exact name
+            continue;
           }
+
+          // Anti-Redundancy & Duplicate Column Protection Check
+          const duplicateCheck = this.findSemanticDuplicate(spec.tableName, col.name, existingColumns);
+          if (duplicateCheck.isDuplicate) {
+            this.logger.warn(
+              `[Migration Anti-Redundancy Rule] Skipped adding redundant column '${col.name}' to table '${spec.tableName}' — existing column '${duplicateCheck.existingMatch}' is already active (${duplicateCheck.reason}).`,
+            );
+            continue; // Prevent creating redundant duplicate columns!
+          }
+
+          let addSql = `ALTER TABLE "${spec.tableName}" ADD COLUMN IF NOT EXISTS "${col.name}" ${col.type}`;
+          if (col.default !== undefined) {
+            addSql += ` DEFAULT ${col.default}`;
+          }
+          // Always NULLABLE for safe migration over existing rows
+          await queryRunner.query(addSql);
+          this.logger.log(`[Migration] Auto-added nullable column '${col.name}' to table '${spec.tableName}'`);
+          existingColumns.push(col.name);
         }
 
         // 4. Safe Column Deletion Check (Zero-Data-Loss Rule)
