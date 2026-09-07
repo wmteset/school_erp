@@ -1,12 +1,10 @@
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { DataSource, QueryRunner } from 'typeorm';
 import { SystemMigrationAuditEntity } from './entities/migration.entity';
-import { NotificationEntity } from '../notifications/entities/notification.entity';
 
 export interface ColumnDefinition {
   name: string;
-  type: string; // e.g., 'character varying', 'integer', 'float', 'text', 'boolean', 'jsonb'
-  nullable?: boolean;
+  type: string; // e.g., 'character varying', 'integer', 'double precision', 'text', 'boolean', 'jsonb'
   default?: string;
 }
 
@@ -39,22 +37,36 @@ export class MigrationService implements OnApplicationBootstrap {
     let failed = 0;
 
     const migrationSpecs: TableMigrationSpec[] = [
+      // 0. Notifications Table (Executed FIRST so alerting system is ready immediately)
+      {
+        tableName: 'notifications',
+        columns: [
+          { name: 'id', type: 'character varying' },
+          { name: 'title', type: 'character varying' },
+          { name: 'message', type: 'text' },
+          { name: 'category', type: 'character varying', default: "'System'" },
+          { name: 'time', type: 'character varying' },
+          { name: 'read', type: 'boolean', default: 'false' },
+          { name: 'priority', type: 'character varying', default: "'normal'" },
+        ],
+      },
+
       // 1. Users Table
       {
         tableName: 'users',
         columns: [
-          { name: 'id', type: 'character varying', nullable: false },
-          { name: 'email', type: 'character varying', nullable: false },
-          { name: 'password', type: 'character varying', nullable: false },
-          { name: 'name', type: 'character varying', nullable: false },
-          { name: 'role', type: 'character varying', nullable: false, default: "'teacher'" },
-          { name: 'title', type: 'character varying', nullable: true },
-          { name: 'department', type: 'character varying', nullable: true },
-          { name: 'staffId', type: 'character varying', nullable: true },
-          { name: 'avatar', type: 'text', nullable: true },
+          { name: 'id', type: 'character varying' },
+          { name: 'email', type: 'character varying' },
+          { name: 'password', type: 'character varying' },
+          { name: 'name', type: 'character varying' },
+          { name: 'role', type: 'character varying', default: "'teacher'" },
+          { name: 'title', type: 'character varying' },
+          { name: 'department', type: 'character varying' },
+          { name: 'staffId', type: 'character varying' },
+          { name: 'avatar', type: 'text' },
           { name: 'isActive', type: 'boolean', default: 'true' },
           { name: 'sessionVersion', type: 'integer', default: '1' },
-          { name: 'lastLogin', type: 'character varying', nullable: true },
+          { name: 'lastLogin', type: 'character varying' },
         ],
       },
 
@@ -62,24 +74,24 @@ export class MigrationService implements OnApplicationBootstrap {
       {
         tableName: 'staff',
         columns: [
-          { name: 'id', type: 'character varying', nullable: false },
-          { name: 'firstName', type: 'character varying', nullable: false },
-          { name: 'lastName', type: 'character varying', nullable: false },
+          { name: 'id', type: 'character varying' },
+          { name: 'firstName', type: 'character varying' },
+          { name: 'lastName', type: 'character varying' },
           { name: 'gender', type: 'character varying', default: "'Male'" },
-          { name: 'email', type: 'character varying', nullable: false },
-          { name: 'phone', type: 'character varying', nullable: false },
+          { name: 'email', type: 'character varying' },
+          { name: 'phone', type: 'character varying' },
           { name: 'role', type: 'character varying', default: "'teacher'" },
           { name: 'designation', type: 'character varying', default: "''" },
-          { name: 'department', type: 'character varying', nullable: false },
-          { name: 'subject', type: 'character varying', nullable: true },
-          { name: 'joiningDate', type: 'character varying', nullable: false },
+          { name: 'department', type: 'character varying' },
+          { name: 'subject', type: 'character varying' },
+          { name: 'joiningDate', type: 'character varying' },
           { name: 'employmentType', type: 'character varying', default: "'Full-time'" },
-          { name: 'qualification', type: 'character varying', nullable: true },
+          { name: 'qualification', type: 'character varying' },
           { name: 'experienceYears', type: 'integer', default: '0' },
-          { name: 'avatar', type: 'text', nullable: true },
+          { name: 'avatar', type: 'text' },
           { name: 'status', type: 'character varying', default: "'Active'" },
-          { name: 'address', type: 'text', nullable: true },
-          { name: 'emergencyContact', type: 'text', nullable: true },
+          { name: 'address', type: 'text' },
+          { name: 'emergencyContact', type: 'text' },
           { name: 'salaryBaseSalary', type: 'double precision', default: '5000' },
           { name: 'salaryHra', type: 'double precision', default: '1100' },
           { name: 'salaryTransportAllowance', type: 'double precision', default: '350' },
@@ -104,83 +116,83 @@ export class MigrationService implements OnApplicationBootstrap {
       {
         tableName: 'students',
         columns: [
-          { name: 'id', type: 'character varying', nullable: false },
-          { name: 'firstName', type: 'character varying', nullable: false },
-          { name: 'lastName', type: 'character varying', nullable: false },
+          { name: 'id', type: 'character varying' },
+          { name: 'firstName', type: 'character varying' },
+          { name: 'lastName', type: 'character varying' },
           { name: 'gender', type: 'character varying', default: "'Male'" },
-          { name: 'grade', type: 'character varying', nullable: false },
-          { name: 'section', type: 'character varying', nullable: false },
+          { name: 'grade', type: 'character varying' },
+          { name: 'section', type: 'character varying' },
           { name: 'rollNumber', type: 'character varying', default: "'01'" },
-          { name: 'dateOfBirth', type: 'character varying', nullable: false },
-          { name: 'admissionDate', type: 'character varying', nullable: false },
+          { name: 'dateOfBirth', type: 'character varying' },
+          { name: 'admissionDate', type: 'character varying' },
           { name: 'bloodGroup', type: 'character varying', default: "'O+'" },
           { name: 'status', type: 'character varying', default: "'Active'" },
-          { name: 'avatar', type: 'text', nullable: true },
-          { name: 'parentName', type: 'character varying', nullable: false },
-          { name: 'parentPhone', type: 'character varying', nullable: false },
-          { name: 'parentEmail', type: 'character varying', nullable: false },
-          { name: 'address', type: 'text', nullable: true },
-          { name: 'emergencyContact', type: 'text', nullable: true },
-          { name: 'medicalNotes', type: 'text', nullable: true },
+          { name: 'avatar', type: 'text' },
+          { name: 'parentName', type: 'character varying' },
+          { name: 'parentPhone', type: 'character varying' },
+          { name: 'parentEmail', type: 'character varying' },
+          { name: 'address', type: 'text' },
+          { name: 'emergencyContact', type: 'text' },
+          { name: 'medicalNotes', type: 'text' },
           { name: 'activities', type: 'jsonb', default: "'[]'::jsonb" },
           { name: 'awards', type: 'jsonb', default: "'[]'::jsonb" },
         ],
       },
 
-      // 4. Attendance Records
+      // 4. Attendance Records Table
       {
         tableName: 'attendance_records',
         columns: [
-          { name: 'id', type: 'integer', nullable: false },
-          { name: 'date', type: 'character varying', nullable: false },
-          { name: 'targetType', type: 'character varying', nullable: false },
-          { name: 'targetId', type: 'character varying', nullable: false },
-          { name: 'status', type: 'character varying', nullable: false },
-          { name: 'checkIn', type: 'character varying', nullable: true },
-          { name: 'checkOut', type: 'character varying', nullable: true },
-          { name: 'note', type: 'character varying', nullable: true },
+          { name: 'id', type: 'integer' },
+          { name: 'date', type: 'character varying' },
+          { name: 'targetType', type: 'character varying' },
+          { name: 'targetId', type: 'character varying' },
+          { name: 'status', type: 'character varying' },
+          { name: 'checkIn', type: 'character varying' },
+          { name: 'checkOut', type: 'character varying' },
+          { name: 'note', type: 'character varying' },
         ],
       },
 
-      // 5. Leave Requests
+      // 5. Leave Requests Table
       {
         tableName: 'leave_requests',
         columns: [
-          { name: 'id', type: 'character varying', nullable: false },
-          { name: 'staffId', type: 'character varying', nullable: false },
-          { name: 'staffName', type: 'character varying', nullable: false },
-          { name: 'department', type: 'character varying', nullable: false },
-          { name: 'leaveType', type: 'character varying', nullable: false },
-          { name: 'startDate', type: 'character varying', nullable: false },
-          { name: 'endDate', type: 'character varying', nullable: false },
+          { name: 'id', type: 'character varying' },
+          { name: 'staffId', type: 'character varying' },
+          { name: 'staffName', type: 'character varying' },
+          { name: 'department', type: 'character varying' },
+          { name: 'leaveType', type: 'character varying' },
+          { name: 'startDate', type: 'character varying' },
+          { name: 'endDate', type: 'character varying' },
           { name: 'daysCount', type: 'integer', default: '1' },
-          { name: 'reason', type: 'text', nullable: true },
-          { name: 'substituteTeacher', type: 'character varying', nullable: true },
+          { name: 'reason', type: 'text' },
+          { name: 'substituteTeacher', type: 'character varying' },
           { name: 'status', type: 'character varying', default: "'Pending'" },
-          { name: 'appliedDate', type: 'character varying', nullable: false },
-          { name: 'reviewedBy', type: 'character varying', nullable: true },
-          { name: 'reviewRemarks', type: 'text', nullable: true },
+          { name: 'appliedDate', type: 'character varying' },
+          { name: 'reviewedBy', type: 'character varying' },
+          { name: 'reviewRemarks', type: 'text' },
         ],
       },
 
-      // 6. School Info
+      // 6. School Info Table
       {
         tableName: 'school_info',
         columns: [
-          { name: 'id', type: 'integer', nullable: false },
-          { name: 'name', type: 'character varying', nullable: false },
-          { name: 'tagline', type: 'character varying', nullable: true },
+          { name: 'id', type: 'integer' },
+          { name: 'name', type: 'character varying' },
+          { name: 'tagline', type: 'character varying' },
           { name: 'headerSubtitle', type: 'character varying', default: "'CBSE & IB World School #04291'" },
           { name: 'affiliation', type: 'character varying', default: "'CBSE & IB World School #04291'" },
-          { name: 'logo', type: 'text', nullable: true },
+          { name: 'logo', type: 'text' },
           { name: 'established', type: 'integer', default: '1998' },
-          { name: 'email', type: 'character varying', nullable: true },
-          { name: 'phone', type: 'character varying', nullable: true },
-          { name: 'address', type: 'text', nullable: true },
-          { name: 'website', type: 'character varying', nullable: true },
+          { name: 'email', type: 'character varying' },
+          { name: 'phone', type: 'character varying' },
+          { name: 'address', type: 'text' },
+          { name: 'website', type: 'character varying' },
           { name: 'currency', type: 'character varying', default: "'$'" },
           { name: 'academicYear', type: 'character varying', default: "'2026-2027'" },
-          { name: 'principal', type: 'character varying', nullable: true },
+          { name: 'principal', type: 'character varying' },
           { name: 'themeColor', type: 'character varying', default: "'indigo'" },
         ],
       },
@@ -189,10 +201,10 @@ export class MigrationService implements OnApplicationBootstrap {
       {
         tableName: 'monthly_payrolls',
         columns: [
-          { name: 'id', type: 'character varying', nullable: false },
-          { name: 'month', type: 'character varying', nullable: false },
-          { name: 'year', type: 'integer', nullable: false },
-          { name: 'disbursementDate', type: 'character varying', nullable: false },
+          { name: 'id', type: 'character varying' },
+          { name: 'month', type: 'character varying' },
+          { name: 'year', type: 'integer' },
+          { name: 'disbursementDate', type: 'character varying' },
           { name: 'status', type: 'character varying', default: "'Draft'" },
           { name: 'totalGross', type: 'double precision', default: '0' },
           { name: 'totalDeductions', type: 'double precision', default: '0' },
@@ -202,12 +214,12 @@ export class MigrationService implements OnApplicationBootstrap {
       {
         tableName: 'staff_payroll_records',
         columns: [
-          { name: 'id', type: 'integer', nullable: false },
-          { name: 'payrollId', type: 'character varying', nullable: false },
-          { name: 'staffId', type: 'character varying', nullable: false },
-          { name: 'staffName', type: 'character varying', nullable: false },
-          { name: 'role', type: 'character varying', nullable: false },
-          { name: 'department', type: 'character varying', nullable: false },
+          { name: 'id', type: 'integer' },
+          { name: 'payrollId', type: 'character varying' },
+          { name: 'staffId', type: 'character varying' },
+          { name: 'staffName', type: 'character varying' },
+          { name: 'role', type: 'character varying' },
+          { name: 'department', type: 'character varying' },
           { name: 'baseSalary', type: 'double precision', default: '0' },
           { name: 'hra', type: 'double precision', default: '0' },
           { name: 'transportAllowance', type: 'double precision', default: '0' },
@@ -221,23 +233,23 @@ export class MigrationService implements OnApplicationBootstrap {
           { name: 'netSalary', type: 'double precision', default: '0' },
           { name: 'paymentStatus', type: 'character varying', default: "'Pending'" },
           { name: 'paymentMethod', type: 'character varying', default: "'Bank Transfer'" },
-          { name: 'transactionRef', type: 'character varying', nullable: true },
-          { name: 'paidDate', type: 'character varying', nullable: true },
+          { name: 'transactionRef', type: 'character varying' },
+          { name: 'paidDate', type: 'character varying' },
         ],
       },
 
-      // 8. Activities, Classes & Notifications
+      // 8. Activities & Classes Tables
       {
         tableName: 'activities',
         columns: [
-          { name: 'id', type: 'character varying', nullable: false },
-          { name: 'name', type: 'character varying', nullable: false },
-          { name: 'category', type: 'character varying', nullable: false },
-          { name: 'mentorTeacher', type: 'character varying', nullable: false },
-          { name: 'mentorRole', type: 'character varying', nullable: true },
-          { name: 'description', type: 'text', nullable: true },
-          { name: 'meetingSchedule', type: 'character varying', nullable: true },
-          { name: 'roomLocation', type: 'character varying', nullable: true },
+          { name: 'id', type: 'character varying' },
+          { name: 'name', type: 'character varying' },
+          { name: 'category', type: 'character varying' },
+          { name: 'mentorTeacher', type: 'character varying' },
+          { name: 'mentorRole', type: 'character varying' },
+          { name: 'description', type: 'text' },
+          { name: 'meetingSchedule', type: 'character varying' },
+          { name: 'roomLocation', type: 'character varying' },
           { name: 'badgeColor', type: 'character varying', default: "'indigo'" },
           { name: 'enrolledStudents', type: 'jsonb', default: "'[]'::jsonb" },
           { name: 'achievements', type: 'jsonb', default: "'[]'::jsonb" },
@@ -246,26 +258,14 @@ export class MigrationService implements OnApplicationBootstrap {
       {
         tableName: 'classes',
         columns: [
-          { name: 'id', type: 'character varying', nullable: false },
-          { name: 'grade', type: 'character varying', nullable: false },
-          { name: 'section', type: 'character varying', nullable: false },
-          { name: 'roomNumber', type: 'character varying', nullable: true },
-          { name: 'classTeacher', type: 'character varying', nullable: true },
+          { name: 'id', type: 'character varying' },
+          { name: 'grade', type: 'character varying' },
+          { name: 'section', type: 'character varying' },
+          { name: 'roomNumber', type: 'character varying' },
+          { name: 'classTeacher', type: 'character varying' },
           { name: 'studentCount', type: 'integer', default: '0' },
           { name: 'capacity', type: 'integer', default: '35' },
           { name: 'schedule', type: 'jsonb', default: "'[]'::jsonb" },
-        ],
-      },
-      {
-        tableName: 'notifications',
-        columns: [
-          { name: 'id', type: 'character varying', nullable: false },
-          { name: 'title', type: 'character varying', nullable: false },
-          { name: 'message', type: 'text', nullable: false },
-          { name: 'category', type: 'character varying', default: "'System'" },
-          { name: 'time', type: 'character varying', nullable: true },
-          { name: 'read', type: 'boolean', default: 'false' },
-          { name: 'priority', type: 'character varying', default: "'normal'" },
         ],
       },
     ];
@@ -287,6 +287,7 @@ export class MigrationService implements OnApplicationBootstrap {
 
   /**
    * Executes migration for a table with 3-Hit Retry Mechanism and Transactional Rollback.
+   * Ensures all newly added columns are NULLABLE so existing data is never corrupted.
    */
   private async executeTableMigrationWithRetry(spec: TableMigrationSpec): Promise<boolean> {
     const migrationName = `sync_table_${spec.tableName}_schema`;
@@ -306,7 +307,6 @@ export class MigrationService implements OnApplicationBootstrap {
         // 1. Check if table exists in PostgreSQL
         const tableExists = await this.checkIfTableExists(queryRunner, spec.tableName);
         if (!tableExists) {
-          // Table does not exist yet (TypeORM synchronize or fresh DB will handle CREATE TABLE)
           await queryRunner.commitTransaction();
           await queryRunner.release();
           return true;
@@ -315,19 +315,16 @@ export class MigrationService implements OnApplicationBootstrap {
         // 2. Fetch existing columns from information_schema
         const existingColumns = await this.getExistingColumns(queryRunner, spec.tableName);
 
-        // 3. Auto-Add missing columns
+        // 3. Auto-Add missing columns as NULLABLE
         for (const col of spec.columns) {
           if (!existingColumns.includes(col.name)) {
             let addSql = `ALTER TABLE "${spec.tableName}" ADD COLUMN IF NOT EXISTS "${col.name}" ${col.type}`;
             if (col.default !== undefined) {
               addSql += ` DEFAULT ${col.default}`;
             }
-            if (col.nullable === false) {
-              // If not null, add with default to avoid constraint error on existing rows
-              addSql += ` NOT NULL`;
-            }
+            // Always NULLABLE for safe migration over existing rows
             await queryRunner.query(addSql);
-            this.logger.log(`[Migration] Auto-added column '${col.name}' to table '${spec.tableName}'`);
+            this.logger.log(`[Migration] Auto-added nullable column '${col.name}' to table '${spec.tableName}'`);
           }
         }
 
@@ -469,11 +466,38 @@ export class MigrationService implements OnApplicationBootstrap {
       const notifId = `NOTIF-MIG-${Date.now()}`;
       const timeStr = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
+      // Check existing columns in notifications table to build a safe dynamic insert
+      const cols = await this.getExistingColumns(queryRunner, 'notifications');
+      
+      let colList = ['"id"', '"title"', '"message"'];
+      let valList = ['$1', '$2', '$3'];
+      let params: any[] = [notifId, title, message];
+
+      if (cols.includes('category')) {
+        colList.push('"category"');
+        valList.push(`$${params.length + 1}`);
+        params.push('System Alert');
+      }
+      if (cols.includes('time')) {
+        colList.push('"time"');
+        valList.push(`$${params.length + 1}`);
+        params.push(timeStr);
+      }
+      if (cols.includes('read')) {
+        colList.push('"read"');
+        valList.push('false');
+      }
+      if (cols.includes('priority')) {
+        colList.push('"priority"');
+        valList.push(`$${params.length + 1}`);
+        params.push(priority);
+      }
+
       await queryRunner.query(
-        `INSERT INTO "notifications" ("id", "title", "message", "category", "time", "read", "priority")
-         VALUES ($1, $2, $3, 'System Alert', $4, false, $5)
+        `INSERT INTO "notifications" (${colList.join(', ')})
+         VALUES (${valList.join(', ')})
          ON CONFLICT ("id") DO NOTHING;`,
-        [notifId, title, message, timeStr, priority],
+        params,
       );
       await queryRunner.release();
     } catch (err) {
