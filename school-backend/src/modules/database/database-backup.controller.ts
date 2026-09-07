@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiHeader } from '@nestjs/swagger';
 import { SeederService } from './seeder.service';
+import { MigrationService } from './migration.service';
 import { SchoolInfoService } from '../school-info/school-info.service';
 import { StudentsService } from '../students/students.service';
 import { StaffService } from '../staff/staff.service';
@@ -14,12 +15,13 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '../auth/roles.enum';
 
-@ApiTags('Database Management, Backup & Reset')
+@ApiTags('Database Management, Backup, Migrations & Reset')
 @Controller('database')
 @UseGuards(RolesGuard)
 export class DatabaseBackupController {
   constructor(
     private readonly seederService: SeederService,
+    private readonly migrationService: MigrationService,
     private readonly schoolInfoService: SchoolInfoService,
     private readonly studentsService: StudentsService,
     private readonly staffService: StaffService,
@@ -30,6 +32,27 @@ export class DatabaseBackupController {
     private readonly classesService: ClassesService,
     private readonly notifService: NotificationsService,
   ) {}
+
+  @Get('migrations')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'View database migration history and resilience audit logs' })
+  @ApiResponse({ status: 200, description: 'Migration audit records' })
+  async getMigrationLogs() {
+    return this.migrationService.getAuditHistory();
+  }
+
+  @Post('migrations/run')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Manually trigger idempotent schema synchronization and integrity checks' })
+  @ApiResponse({ status: 200, description: 'Migration synchronization results' })
+  async runMigrations() {
+    const result = await this.migrationService.runAllMigrations();
+    return {
+      success: true,
+      message: `Schema synchronization completed: ${result.successful}/${result.total} tasks passed.`,
+      result,
+    };
+  }
 
   @Get('export')
   @ApiOperation({ summary: 'Export complete database backup payload in JSON format' })
