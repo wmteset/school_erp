@@ -22,7 +22,7 @@ export const formatDate = (dateString) => {
 export const calculateTenure = (joiningDateStr) => {
   if (!joiningDateStr) return 'N/A';
   const joinDate = new Date(joiningDateStr);
-  const now = new Date('2026-09-02');
+  const now = new Date();
   
   let years = now.getFullYear() - joinDate.getFullYear();
   let months = now.getMonth() - joinDate.getMonth();

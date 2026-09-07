@@ -45,7 +45,7 @@ export const AttendanceView = () => {
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState('daily'); // 'daily' | 'monthly'
 
-  const todayStr = '2026-09-02';
+  const todayStr = new Date().toISOString().split('T')[0];
   const isSelectedDateToday = selectedDate === todayStr;
   const isPastDate = selectedDate < todayStr;
   const isFutureDate = selectedDate > todayStr;

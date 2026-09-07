@@ -54,7 +54,7 @@ export const ActivitiesView = () => {
   const [achievementData, setAchievementData] = useState({
     title: '',
     recipient: '',
-    date: '2026-09-02',
+    date: new Date().toISOString().split('T')[0],
     notes: ''
   });
 
@@ -103,7 +103,7 @@ export const ActivitiesView = () => {
     if (!selectedActivity || !achievementData.title.trim()) return;
     addAchievementToActivity(selectedActivity.id, achievementData);
     setIsAddAchievementOpen(false);
-    setAchievementData({ title: '', recipient: '', date: '2026-09-02', notes: '' });
+    setAchievementData({ title: '', recipient: '', date: new Date().toISOString().split('T')[0], notes: '' });
   };
 
   const handleEnrollStudent = (e) => {

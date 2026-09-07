@@ -36,28 +36,37 @@ export const DashboardView = ({ onOpenEnrollStudent, onOpenHireStaff, onOpenAppl
     classes,
     setActiveTab,
     monthlyPayrollTotal,
-    studentAttendanceRateToday,
-    staffAttendanceRateToday,
     pendingLeavesCount,
     currentRole,
     permissions,
     rolePermissions
   } = useSchool();
 
-  // Compute breakdown for today's attendance
-  const todayStudentAtt = attendance[selectedDate]?.students || {};
-  const studentAttVals = Object.values(todayStudentAtt);
+  const todayStr = new Date().toISOString().split('T')[0];
+  const isSelectedDateToday = selectedDate === todayStr;
+
+  // Compute breakdown for selectedDate's attendance
+  const selectedStudentAtt = attendance[selectedDate]?.students || {};
+  const studentAttVals = Object.values(selectedStudentAtt);
   const studentsPresent = studentAttVals.filter(s => s.status === 'P').length;
   const studentsLate = studentAttVals.filter(s => s.status === 'L').length;
   const studentsAbsent = studentAttVals.filter(s => s.status === 'A').length;
   const studentsExcused = studentAttVals.filter(s => s.status === 'E').length;
 
-  const todayStaffAtt = attendance[selectedDate]?.staff || {};
-  const staffAttVals = Object.values(todayStaffAtt);
+  const studentAttendanceRateForDate = students.length > 0
+    ? (studentAttVals.length > 0 ? Math.round(((studentsPresent + studentsLate) / students.length) * 100) : 0)
+    : 100;
+
+  const selectedStaffAtt = attendance[selectedDate]?.staff || {};
+  const staffAttVals = Object.values(selectedStaffAtt);
   const staffPresent = staffAttVals.filter(s => s.status === 'P').length;
   const staffLate = staffAttVals.filter(s => s.status === 'L').length;
   const staffAbsent = staffAttVals.filter(s => s.status === 'A').length;
   const staffExcused = staffAttVals.filter(s => s.status === 'E').length;
+
+  const staffAttendanceRateForDate = staff.length > 0
+    ? (staffAttVals.length > 0 ? Math.round(((staffPresent + staffLate + staffExcused) / staff.length) * 100) : 0)
+    : 100;
 
   // Pending leaves
   const pendingLeaves = leaveRequests.filter(l => l.status === 'Pending').slice(0, 3);
@@ -68,9 +77,12 @@ export const DashboardView = ({ onOpenEnrollStudent, onOpenHireStaff, onOpenAppl
     return acc;
   }, {});
 
-  // Absentees today list
-  const absentStudents = students.filter(s => todayStudentAtt[s.id]?.status === 'A');
-  const lateStudents = students.filter(s => todayStudentAtt[s.id]?.status === 'L');
+  // Absentees list for selected date
+  const absentStudents = students.filter(s => selectedStudentAtt[s.id]?.status === 'A');
+  const lateStudents = students.filter(s => selectedStudentAtt[s.id]?.status === 'L');
+
+  // Role permissions check: Leave approvals card hidden for teachers
+  const showLeaveApprovalsCard = currentRole !== 'teacher' && rolePermissions.allowedTabs.includes('leaves');
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
@@ -84,7 +96,7 @@ export const DashboardView = ({ onOpenEnrollStudent, onOpenHireStaff, onOpenAppl
         <div className="relative z-10 max-w-2xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/30 border border-indigo-400/30 text-indigo-200 text-xs font-semibold mb-3">
             <Sparkles className="w-3.5 h-3.5 text-indigo-300" />
-            <span>Academic Session {schoolInfo.academicYear} • Perspective: {rolePermissions.title}</span>
+            <span>Academic Session {schoolInfo.academicYear} • Date: {formatDate(selectedDate)} {isSelectedDateToday ? '(Today)' : ''} • Perspective: {rolePermissions.title}</span>
           </div>
 
           <div className="flex items-center gap-3.5 mb-2">
@@ -208,12 +220,12 @@ export const DashboardView = ({ onOpenEnrollStudent, onOpenHireStaff, onOpenAppl
                 <CalendarCheck className="w-6 h-6" />
               </div>
               <span className="text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full">
-                Today: Sep 2
+                {isSelectedDateToday ? 'Today' : formatDate(selectedDate)}
               </span>
             </div>
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-bold text-slate-800">{studentAttendanceRateToday}%</span>
-              <span className="text-xs text-slate-500 font-medium">({studentsPresent}/{students.length} present)</span>
+              <span className="text-2xl font-bold text-slate-800">{studentAttendanceRateForDate}%</span>
+              <span className="text-xs text-slate-500 font-medium">({studentsPresent + studentsLate}/{students.length} attended)</span>
             </div>
             <div className="text-xs text-slate-500 mt-1 flex items-center justify-between">
               <span>Student Attendance</span>
@@ -301,14 +313,14 @@ export const DashboardView = ({ onOpenEnrollStudent, onOpenHireStaff, onOpenAppl
       </div>
 
       {/* Main Grid: Attendance Live Matrix & Analytics */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className={`grid grid-cols-1 ${showLeaveApprovalsCard ? 'lg:grid-cols-3' : 'lg:grid-cols-1'} gap-6`}>
         
         {/* Attendance Breakdown Card */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
+        <div className={`${showLeaveApprovalsCard ? 'lg:col-span-2' : 'lg:col-span-1'} bg-white rounded-2xl border border-slate-200 p-6 shadow-xs`}>
           <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="text-base font-bold text-slate-800">Daily Attendance Overview</h2>
-              <p className="text-xs text-slate-500">Live summary for {formatDate(selectedDate)}</p>
+              <p className="text-xs text-slate-500">Live summary for {formatDate(selectedDate)} {isSelectedDateToday ? '(Today)' : ''}</p>
             </div>
             {rolePermissions.allowedTabs.includes('attendance') && (
               <button
@@ -366,138 +378,142 @@ export const DashboardView = ({ onOpenEnrollStudent, onOpenHireStaff, onOpenAppl
             </div>
           </div>
 
-          {/* Staff Status Grid */}
-          <div>
-            <div className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-              <Users className="w-4 h-4 text-emerald-600" />
-              <span>Staff & Faculty (Total: {staff.length})</span>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                <span className="text-xs font-semibold text-slate-700">Present</span>
-                <div className="text-lg font-bold text-slate-800 mt-1">{staffPresent} / {staff.length}</div>
-                <div className="text-[11px] text-emerald-600 font-medium">{staffAttendanceRateToday}% turnout</div>
+          {/* Staff Status Grid (Only visible for non-teacher roles) */}
+          {currentRole !== 'teacher' && (
+            <div>
+              <div className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                <Users className="w-4 h-4 text-emerald-600" />
+                <span>Staff & Faculty (Total: {staff.length})</span>
               </div>
-
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                <span className="text-xs font-semibold text-slate-700">Late</span>
-                <div className="text-lg font-bold text-slate-800 mt-1">{staffLate}</div>
-                <div className="text-[11px] text-slate-500">Documented</div>
-              </div>
-
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                <span className="text-xs font-semibold text-slate-700">On Leave</span>
-                <div className="text-lg font-bold text-slate-800 mt-1">{staffExcused}</div>
-                <div className="text-[11px] text-indigo-600">Approved leaves</div>
-              </div>
-
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                <span className="text-xs font-semibold text-slate-700">Unexcused</span>
-                <div className="text-lg font-bold text-slate-800 mt-1">{staffAbsent}</div>
-                <div className="text-[11px] text-slate-500">0 today</div>
-              </div>
-            </div>
-          </div>
-
-        </div>
-
-        {/* Pending Leaves Approval Widget */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-amber-100 text-amber-700 rounded-lg">
-                  <Palmtree className="w-4 h-4" />
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                  <span className="text-xs font-semibold text-slate-700">Present</span>
+                  <div className="text-lg font-bold text-slate-800 mt-1">{staffPresent} / {staff.length}</div>
+                  <div className="text-[11px] text-emerald-600 font-medium">{staffAttendanceRateForDate}% turnout</div>
                 </div>
-                <div>
-                  <h3 className="font-bold text-slate-800 text-sm">Leave Approvals</h3>
-                  <p className="text-xs text-slate-500">{pendingLeavesCount} pending review</p>
+
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                  <span className="text-xs font-semibold text-slate-700">Late</span>
+                  <div className="text-lg font-bold text-slate-800 mt-1">{staffLate}</div>
+                  <div className="text-[11px] text-slate-500">Documented</div>
+                </div>
+
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                  <span className="text-xs font-semibold text-slate-700">On Leave</span>
+                  <div className="text-lg font-bold text-slate-800 mt-1">{staffExcused}</div>
+                  <div className="text-[11px] text-indigo-600">Approved leaves</div>
+                </div>
+
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                  <span className="text-xs font-semibold text-slate-700">Unexcused</span>
+                  <div className="text-lg font-bold text-slate-800 mt-1">{staffAbsent}</div>
+                  <div className="text-[11px] text-slate-500">0 unexcused</div>
                 </div>
               </div>
-              {rolePermissions.allowedTabs.includes('leaves') && (
-                <button
-                  onClick={() => setActiveTab('leaves')}
-                  className="text-xs font-semibold text-amber-600 hover:text-amber-800 cursor-pointer"
-                >
-                  View all
-                </button>
-              )}
             </div>
-
-            <div className="space-y-3">
-              {pendingLeaves.length === 0 ? (
-                <div className="text-center py-8 text-slate-400">
-                  <CheckCircle2 className="w-8 h-8 mx-auto text-emerald-400 mb-2" />
-                  <p className="text-xs font-semibold text-slate-700">No pending leave requests</p>
-                  <p className="text-[11px] text-slate-400">All faculty leave requests are up to date.</p>
-                </div>
-              ) : (
-                pendingLeaves.map(req => (
-                  <div
-                    key={req.id}
-                    className="p-3 bg-slate-50/80 border border-slate-200/80 rounded-xl"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <div className="text-xs font-bold text-slate-800">{req.staffName}</div>
-                        <div className="text-[11px] text-slate-500">{req.department} • {req.leaveType}</div>
-                      </div>
-                      <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-bold rounded-full">
-                        {req.daysCount} Day{req.daysCount > 1 ? 's' : ''}
-                      </span>
-                    </div>
-
-                    <p className="text-xs text-slate-600 mt-1.5 line-clamp-1 italic bg-white/70 p-1.5 rounded border border-slate-100">
-                      "{req.reason}"
-                    </p>
-
-                    <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-slate-200/60">
-                      <span className="text-[10px] text-slate-400">
-                        {formatDate(req.startDate)}
-                      </span>
-                      {permissions?.canReviewLeave ? (
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={() => reviewLeaveRequest(req.id, 'Approved', 'Approved by Administration')}
-                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-semibold transition-colors cursor-pointer"
-                          >
-                            Approve
-                          </button>
-                          <button
-                            onClick={() => reviewLeaveRequest(req.id, 'Rejected', 'Declined due to schedule conflict')}
-                            className="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer"
-                          >
-                            Reject
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded">
-                          Under Review
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {permissions?.canApplyLeave && (
-            <button
-              onClick={onOpenApplyLeave}
-              className="w-full mt-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors text-center cursor-pointer"
-            >
-              + Submit New Staff Leave Request
-            </button>
           )}
+
         </div>
+
+        {/* Pending Leaves Approval Widget (Hidden for Teacher role) */}
+        {showLeaveApprovalsCard && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-amber-100 text-amber-700 rounded-lg">
+                    <Palmtree className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-800 text-sm">Leave Approvals</h3>
+                    <p className="text-xs text-slate-500">{pendingLeavesCount} pending review</p>
+                  </div>
+                </div>
+                {rolePermissions.allowedTabs.includes('leaves') && (
+                  <button
+                    onClick={() => setActiveTab('leaves')}
+                    className="text-xs font-semibold text-amber-600 hover:text-amber-800 cursor-pointer"
+                  >
+                    View all
+                  </button>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                {pendingLeaves.length === 0 ? (
+                  <div className="text-center py-8 text-slate-400">
+                    <CheckCircle2 className="w-8 h-8 mx-auto text-emerald-400 mb-2" />
+                    <p className="text-xs font-semibold text-slate-700">No pending leave requests</p>
+                    <p className="text-[11px] text-slate-400">All faculty leave requests are up to date.</p>
+                  </div>
+                ) : (
+                  pendingLeaves.map(req => (
+                    <div
+                      key={req.id}
+                      className="p-3 bg-slate-50/80 border border-slate-200/80 rounded-xl"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="text-xs font-bold text-slate-800">{req.staffName}</div>
+                          <div className="text-[11px] text-slate-500">{req.department} • {req.leaveType}</div>
+                        </div>
+                        <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-bold rounded-full">
+                          {req.daysCount} Day{req.daysCount > 1 ? 's' : ''}
+                        </span>
+                      </div>
+
+                      <p className="text-xs text-slate-600 mt-1.5 line-clamp-1 italic bg-white/70 p-1.5 rounded border border-slate-100">
+                        "{req.reason}"
+                      </p>
+
+                      <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-slate-200/60">
+                        <span className="text-[10px] text-slate-400">
+                          {formatDate(req.startDate)}
+                        </span>
+                        {permissions?.canReviewLeave ? (
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => reviewLeaveRequest(req.id, 'Approved', 'Approved by Administration')}
+                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-semibold transition-colors cursor-pointer"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => reviewLeaveRequest(req.id, 'Rejected', 'Declined due to schedule conflict')}
+                              className="px-2.5 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded">
+                            Under Review
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {permissions?.canApplyLeave && (
+              <button
+                onClick={onOpenApplyLeave}
+                className="w-full mt-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors text-center cursor-pointer"
+              >
+                + Submit New Staff Leave Request
+              </button>
+            )}
+          </div>
+        )}
 
       </div>
 
       {/* Secondary Grid: Absentees Follow-up & Extracurricular Highlights */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
-        {/* Today's Absentees Follow-up Card */}
+        {/* Selected Date's Absentees Follow-up Card */}
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -505,7 +521,7 @@ export const DashboardView = ({ onOpenEnrollStudent, onOpenHireStaff, onOpenAppl
                 <AlertTriangle className="w-4 h-4" />
               </div>
               <div>
-                <h3 className="font-bold text-slate-800 text-sm">Today's Absent & Tardy Students</h3>
+                <h3 className="font-bold text-slate-800 text-sm">Absent & Tardy Students ({formatDate(selectedDate)})</h3>
                 <p className="text-xs text-slate-500">Requires guardian communication</p>
               </div>
             </div>
@@ -517,12 +533,12 @@ export const DashboardView = ({ onOpenEnrollStudent, onOpenHireStaff, onOpenAppl
           <div className="space-y-2.5">
             {absentStudents.length === 0 && lateStudents.length === 0 ? (
               <div className="text-center py-6 text-slate-400">
-                <p className="text-xs">100% attendance recorded today! No absentees.</p>
+                <p className="text-xs">100% attendance or no absentees recorded for {formatDate(selectedDate)}.</p>
               </div>
             ) : (
               [...absentStudents, ...lateStudents].map(stud => {
-                const status = todayStudentAtt[stud.id]?.status;
-                const note = todayStudentAtt[stud.id]?.note;
+                const status = selectedStudentAtt[stud.id]?.status;
+                const note = selectedStudentAtt[stud.id]?.note;
                 const isAbsent = status === 'A';
 
                 return (

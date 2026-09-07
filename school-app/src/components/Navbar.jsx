@@ -16,6 +16,7 @@ import {
   Building
 } from 'lucide-react';
 import { useSchool } from '../context/SchoolContext';
+import { formatDate } from '../utils/helpers';
 
 export const Navbar = ({ onOpenNotifications, onOpenQuickAction, onOpenGlobalSearch }) => {
   const {
@@ -24,8 +25,12 @@ export const Navbar = ({ onOpenNotifications, onOpenQuickAction, onOpenGlobalSea
     currentUser,
     logout,
     notifications,
-    rolePermissions
+    rolePermissions,
+    selectedDate,
+    setSelectedDate
   } = useSchool();
+
+  const todayStr = new Date().toISOString().split('T')[0];
 
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -101,10 +106,42 @@ export const Navbar = ({ onOpenNotifications, onOpenQuickAction, onOpenGlobalSea
         {/* Right: Date, Quick Action, Notifications & User Profile */}
         <div className="flex items-center gap-2 sm:gap-3">
           
-          {/* Today's Date Indicator */}
-          <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100/70 border border-slate-200/60 rounded-xl text-xs text-slate-600 font-medium">
-            <Calendar className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Today: Sep 2, 2026</span>
+          {/* Dynamic Selectable Datepicker Tag */}
+          <div className="relative flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100/90 hover:bg-slate-200/70 border border-slate-200/80 rounded-xl text-xs text-slate-700 font-medium transition-colors group cursor-pointer shadow-2xs">
+            <Calendar className="w-3.5 h-3.5 text-indigo-600 shrink-0 pointer-events-none" />
+            <div className="flex items-center gap-1 pointer-events-none">
+              <span className="font-semibold text-slate-500 hidden lg:inline">
+                {selectedDate === todayStr ? 'Today:' : 'Date:'}
+              </span>
+              <span className="font-bold text-slate-800">
+                {formatDate(selectedDate)}
+              </span>
+            </div>
+            {/* HTML5 Native Datepicker overlay */}
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => {
+                if (e.target.value) {
+                  setSelectedDate(e.target.value);
+                }
+              }}
+              aria-label="Select active date"
+              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+            />
+            {selectedDate !== todayStr && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedDate(todayStr);
+                }}
+                className="relative z-20 ml-1 px-1.5 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold rounded-md transition-colors shadow-2xs cursor-pointer"
+                title="Reset date to today"
+              >
+                Today
+              </button>
+            )}
           </div>
 
           {/* Quick Action Button */}

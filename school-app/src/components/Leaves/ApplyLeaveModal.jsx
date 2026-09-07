@@ -4,12 +4,13 @@ import { useSchool } from '../../context/SchoolContext';
 
 export const ApplyLeaveModal = ({ isOpen, onClose }) => {
   const { staff, applyLeaveRequest } = useSchool();
+  const todayStr = new Date().toISOString().split('T')[0];
 
   const [formData, setFormData] = useState({
     staffId: staff[0]?.id || '',
     leaveType: 'Casual Leave',
-    startDate: '2026-09-05',
-    endDate: '2026-09-06',
+    startDate: todayStr,
+    endDate: todayStr,
     reason: '',
     substituteTeacher: 'Internal arrangement / Substitute'
   });
