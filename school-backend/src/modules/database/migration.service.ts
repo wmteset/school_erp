@@ -14,6 +14,49 @@ export interface TableMigrationSpec {
   deprecatedColumns?: string[]; // Columns eligible for safe deletion only if 100% empty (Zero Data Loss)
 }
 
+/**
+ * Semantic Alias Groups: Dictionary of column aliases representing the same semantic entity.
+ * Prevents redundant duplicate columns from ever being added with different names.
+ */
+export const SEMANTIC_COLUMN_ALIAS_GROUPS: string[][] = [
+  // Date of Birth
+  ['dob', 'dateofbirth', 'birthdate', 'date_of_birth', 'birth_date', 'birthday', 'studentdob'],
+  // Guardian / Parent Name
+  ['guardianname', 'parentname', 'fathername', 'mothername', 'guardian_name', 'parent_name', 'father_name', 'mother_name'],
+  // Guardian / Parent Phone / Emergency Contact
+  ['guardianphone', 'parentphone', 'fatherphone', 'motherphone', 'guardian_phone', 'parent_phone'],
+  // Guardian / Parent Email
+  ['guardianemail', 'parentemail', 'fatheremail', 'motheremail', 'guardian_email', 'parent_email'],
+  // Class Teacher
+  ['classteachername', 'classteacher', 'class_teacher', 'class_teacher_name', 'teachername', 'mentorname'],
+  // Faculty Advisor / Mentor
+  ['facultyadvisor', 'mentorteacher', 'mentorrole', 'mentor', 'advisor', 'faculty_advisor', 'mentor_teacher'],
+  // Room Number
+  ['roomnumber', 'room', 'roomlocation', 'room_number', 'room_location', 'classroom'],
+  // Student Count / Total Students
+  ['totalstudents', 'studentcount', 'studentscount', 'total_students', 'student_count', 'enrollmentcount'],
+  // Phone numbers
+  ['phone', 'phonenumber', 'contactnumber', 'mobilenumber', 'mobile', 'phone_number', 'contact_number'],
+  // Email address
+  ['email', 'emailaddress', 'mail', 'emailid', 'email_address', 'email_id'],
+  // Base Salary
+  ['salarybasesalary', 'basesalary', 'basicsalary', 'base_salary', 'basic_salary'],
+  // Joining / Hire Date
+  ['joiningdate', 'dateofjoining', 'hiredate', 'joining_date', 'hire_date', 'startdate', 'start_date'],
+  // Schedule Summary
+  ['schedulesummary', 'schedule', 'meetingschedule', 'schedule_summary', 'meeting_schedule'],
+  // Emergency Contact
+  ['emergencycontact', 'emergency_contact', 'emergencyphone', 'emergency_phone'],
+  // Medical notes
+  ['medicalnotes', 'medical_notes', 'healthnotes', 'medicalinfo', 'health_notes'],
+  // Admission date
+  ['admissiondate', 'admission_date', 'dateofadmission', 'enrollmentdate', 'enrollment_date'],
+  // Qualification
+  ['qualification', 'educationalqualification', 'degree', 'qualifications'],
+  // Designation & Role
+  ['designation', 'jobdesignation', 'job_designation', 'positiontitle'],
+];
+
 @Injectable()
 export class MigrationService implements OnApplicationBootstrap {
   private readonly logger = new Logger(MigrationService.name);
@@ -21,8 +64,55 @@ export class MigrationService implements OnApplicationBootstrap {
   constructor(private readonly dataSource: DataSource) {}
 
   async onApplicationBootstrap() {
-    this.logger.log('Starting automated migration & schema integrity verification...');
+    this.logger.log('Starting automated migration & schema integrity verification with Anti-Redundancy Rules...');
     await this.runAllMigrations();
+  }
+
+  /**
+   * Helper: Normalizes a column identifier to lowercased alphanumeric characters only.
+   */
+  public normalizeColumnName(name: string): string {
+    return name.toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+
+  /**
+   * Anti-Redundancy & Semantic Duplicate Column Detector:
+   * Analyzes whether a proposed column name is already represented by an existing column
+   * under a different alias, casing, or format on the target table.
+   */
+  public findSemanticDuplicate(
+    tableName: string,
+    proposedColName: string,
+    existingColumns: string[],
+  ): { isDuplicate: boolean; existingMatch?: string; reason?: string } {
+    const normalizedProposed = this.normalizeColumnName(proposedColName);
+
+    for (const existingCol of existingColumns) {
+      const normalizedExisting = this.normalizeColumnName(existingCol);
+
+      // 1. Format/Casing Equivalence (e.g. date_of_birth vs dateOfBirth)
+      if (normalizedProposed === normalizedExisting && proposedColName !== existingCol) {
+        return {
+          isDuplicate: true,
+          existingMatch: existingCol,
+          reason: `Formatting/casing equivalent of existing column '${existingCol}'`,
+        };
+      }
+
+      // 2. Semantic Synonym / Alias Equivalence (e.g. dateOfBirth vs dob)
+      for (const group of SEMANTIC_COLUMN_ALIAS_GROUPS) {
+        const normalizedGroup = group.map(g => this.normalizeColumnName(g));
+        if (normalizedGroup.includes(normalizedProposed) && normalizedGroup.includes(normalizedExisting)) {
+          return {
+            isDuplicate: true,
+            existingMatch: existingCol,
+            reason: `Semantic synonym/alias of existing column '${existingCol}'`,
+          };
+        }
+      }
+    }
+
+    return { isDuplicate: false };
   }
 
   /**
@@ -114,7 +204,7 @@ export class MigrationService implements OnApplicationBootstrap {
         ],
       },
 
-      // 3. Students Table (dob holds Date of Birth; dateOfBirth deprecated and removed safely)
+      // 3. Students Table (dob holds Date of Birth; dateOfBirth is recognized as duplicate alias)
       {
         tableName: 'students',
         columns: [
@@ -294,8 +384,11 @@ export class MigrationService implements OnApplicationBootstrap {
   }
 
   /**
-   * Executes migration for a table with 3-Hit Retry Mechanism and Transactional Rollback.
-   * Ensures all newly added columns are NULLABLE so existing data is never corrupted.
+   * Executes migration for a table with:
+   * 1. 3-Hit Retry Mechanism and Transactional Rollback.
+   * 2. Anti-Redundancy & Semantic Duplicate Column Protection Rule.
+   * 3. Nullable-only safe column additions.
+   * 4. Safe Empty-Only Column Deletion (Zero Data Loss).
    */
   private async executeTableMigrationWithRetry(spec: TableMigrationSpec): Promise<boolean> {
     const migrationName = `sync_table_${spec.tableName}_schema`;
@@ -323,17 +416,30 @@ export class MigrationService implements OnApplicationBootstrap {
         // 2. Fetch existing columns from information_schema
         const existingColumns = await this.getExistingColumns(queryRunner, spec.tableName);
 
-        // 3. Auto-Add missing columns as NULLABLE
+        // 3. Auto-Add missing columns with Anti-Redundancy & Semantic Duplicate Check
         for (const col of spec.columns) {
-          if (!existingColumns.includes(col.name)) {
-            let addSql = `ALTER TABLE "${spec.tableName}" ADD COLUMN IF NOT EXISTS "${col.name}" ${col.type}`;
-            if (col.default !== undefined) {
-              addSql += ` DEFAULT ${col.default}`;
-            }
-            // Always NULLABLE for safe migration over existing rows
-            await queryRunner.query(addSql);
-            this.logger.log(`[Migration] Auto-added nullable column '${col.name}' to table '${spec.tableName}'`);
+          if (existingColumns.includes(col.name)) {
+            // Column already exists with exact name
+            continue;
           }
+
+          // Anti-Redundancy & Duplicate Column Protection Check
+          const duplicateCheck = this.findSemanticDuplicate(spec.tableName, col.name, existingColumns);
+          if (duplicateCheck.isDuplicate) {
+            this.logger.warn(
+              `[Migration Anti-Redundancy Rule] Skipped adding redundant column '${col.name}' to table '${spec.tableName}' — existing column '${duplicateCheck.existingMatch}' is already active (${duplicateCheck.reason}).`,
+            );
+            continue; // Prevent creating redundant duplicate columns!
+          }
+
+          let addSql = `ALTER TABLE "${spec.tableName}" ADD COLUMN IF NOT EXISTS "${col.name}" ${col.type}`;
+          if (col.default !== undefined) {
+            addSql += ` DEFAULT ${col.default}`;
+          }
+          // Always NULLABLE for safe migration over existing rows
+          await queryRunner.query(addSql);
+          this.logger.log(`[Migration] Auto-added nullable column '${col.name}' to table '${spec.tableName}'`);
+          existingColumns.push(col.name);
         }
 
         // 4. Safe Column Deletion Check (Zero-Data-Loss Rule)
