@@ -21,10 +21,24 @@ export const Sidebar = () => {
     leaveRequests,
     activities,
     classes,
+    currentRole,
+    currentUser,
     rolePermissions
   } = useSchool();
 
-  const pendingLeaves = leaveRequests.filter(l => l.status === 'Pending').length;
+  const currentTeacherStaff = staff.find(s =>
+    s.id === currentUser?.id ||
+    (s.email && currentUser?.email && s.email.toLowerCase() === currentUser.email.toLowerCase()) ||
+    (currentUser?.name && `${s.firstName} ${s.lastName}`.toLowerCase() === currentUser.name.toLowerCase())
+  );
+
+  const teacherPendingLeaves = leaveRequests.filter(l =>
+    l.status === 'Pending' &&
+    (l.staffId === currentTeacherStaff?.id || l.staffId === currentUser?.id || (currentUser?.name && l.staffName.toLowerCase() === currentUser.name.toLowerCase()))
+  ).length;
+
+  const allPendingLeaves = leaveRequests.filter(l => l.status === 'Pending').length;
+  const pendingLeaves = currentRole === 'teacher' ? teacherPendingLeaves : allPendingLeaves;
 
   const allNavItems = [
     {
@@ -94,9 +108,8 @@ export const Sidebar = () => {
       
       {/* Navigation Links List */}
       <div className="flex-1 py-4 px-3 space-y-1">
-        <div className="px-3 pb-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
-          <span>Permitted Modules</span>
-          <span className="text-slate-400">{allowedNavItems.length} active</span>
+        <div className="px-3 pb-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+          <span>Main Navigation</span>
         </div>
 
         {allowedNavItems.map((item) => {

@@ -96,8 +96,12 @@ export const StaffProfileModal = ({ staffMember, isOpen, onClose, onEdit }) => {
                   <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
                     {staffMember.firstName} {staffMember.lastName}
                   </h2>
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-500/30 text-emerald-300 border border-emerald-400/30">
-                    {staffMember.role?.toUpperCase() || 'TEACHER'}
+                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${
+                    staffMember.role?.toLowerCase() === 'support_staff' || staffMember.role?.toLowerCase() === 'support'
+                      ? 'bg-slate-700 text-slate-200 border border-slate-600'
+                      : 'bg-emerald-500/30 text-emerald-300 border border-emerald-400/30'
+                  }`}>
+                    {staffMember.role?.toLowerCase() === 'support_staff' || staffMember.role?.toLowerCase() === 'support' ? 'SUPPORT STAFF' : (staffMember.role?.toUpperCase() || 'TEACHER')}
                   </span>
                 </div>
 

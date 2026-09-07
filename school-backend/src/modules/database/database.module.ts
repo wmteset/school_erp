@@ -1,7 +1,9 @@
 import { Module, Global } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { SeederService } from './seeder.service';
+import { MigrationService } from './migration.service';
 import { DatabaseBackupController } from './database-backup.controller';
+import { SystemMigrationAuditEntity } from './entities/migration.entity';
 import { SchoolInfoEntity } from '../school-info/entities/school-info.entity';
 import { StudentEntity } from '../students/entities/student.entity';
 import { StaffEntity } from '../staff/entities/staff.entity';
@@ -26,6 +28,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([
+      SystemMigrationAuditEntity,
       SchoolInfoEntity,
       StudentEntity,
       StaffEntity,
@@ -49,7 +52,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     NotificationsModule,
   ],
   controllers: [DatabaseBackupController],
-  providers: [SeederService],
-  exports: [SeederService],
+  providers: [SeederService, MigrationService],
+  exports: [SeederService, MigrationService],
 })
 export class DatabaseModule {}

@@ -1,129 +1,125 @@
 import { Injectable, OnApplicationBootstrap, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { SchoolInfoEntity } from '../school-info/entities/school-info.entity';
-import { StudentEntity } from '../students/entities/student.entity';
-import { StaffEntity } from '../staff/entities/staff.entity';
-import { AttendanceRecordEntity } from '../attendance/entities/attendance-record.entity';
-import { LeaveRequestEntity } from '../leaves/entities/leave-request.entity';
-import { MonthlyPayrollEntity, StaffPayrollRecordEntity } from '../payroll/entities/monthly-payroll.entity';
-import { ActivityEntity } from '../activities/entities/activity.entity';
-import { ClassEntity } from '../classes/entities/class.entity';
-import { NotificationEntity } from '../notifications/entities/notification.entity';
-import { UserEntity } from '../auth/entities/user.entity';
+import { DataSource } from 'typeorm';
 import { UserRole } from '../auth/roles.enum';
 
 @Injectable()
 export class SeederService implements OnApplicationBootstrap {
   private readonly logger = new Logger(SeederService.name);
 
-  constructor(
-    @InjectRepository(SchoolInfoEntity)
-    private readonly schoolInfoRepo: Repository<SchoolInfoEntity>,
-    @InjectRepository(StudentEntity)
-    private readonly studentRepo: Repository<StudentEntity>,
-    @InjectRepository(StaffEntity)
-    private readonly staffRepo: Repository<StaffEntity>,
-    @InjectRepository(AttendanceRecordEntity)
-    private readonly attendanceRepo: Repository<AttendanceRecordEntity>,
-    @InjectRepository(LeaveRequestEntity)
-    private readonly leaveRepo: Repository<LeaveRequestEntity>,
-    @InjectRepository(MonthlyPayrollEntity)
-    private readonly payrollRepo: Repository<MonthlyPayrollEntity>,
-    @InjectRepository(StaffPayrollRecordEntity)
-    private readonly payrollItemRepo: Repository<StaffPayrollRecordEntity>,
-    @InjectRepository(ActivityEntity)
-    private readonly activityRepo: Repository<ActivityEntity>,
-    @InjectRepository(ClassEntity)
-    private readonly classRepo: Repository<ClassEntity>,
-    @InjectRepository(NotificationEntity)
-    private readonly notifRepo: Repository<NotificationEntity>,
-    @InjectRepository(UserEntity)
-    private readonly userRepo: Repository<UserEntity>,
-  ) {}
+  constructor(private readonly dataSource: DataSource) {}
 
   async onApplicationBootstrap() {
-    this.logger.log('Initializing system bootstrap verification...');
+    this.logger.log('Verifying system bootstrap & baseline master administration...');
     await this.seedAdminUserOnly();
     await this.ensureSchoolInfo();
   }
 
   /**
-   * Strictly seeds ONLY the singleton Master Admin user if not already present.
-   * No mock students, staff, classes, leaves, or payroll are seeded.
+   * Idempotent Seeding: Inserts the Master Admin account using ON CONFLICT ("email") DO NOTHING.
+   * If any admin or user already exists, it is untouched and preserved.
    */
   async seedAdminUserOnly() {
-    const adminExists = await this.userRepo.findOne({
-      where: { role: UserRole.ADMIN },
-    });
+    try {
+      const queryRunner = this.dataSource.createQueryRunner();
+      await queryRunner.connect();
 
-    if (!adminExists) {
-      this.logger.log('No administrator found. Provisioning master Super Admin user...');
-      const adminUser = this.userRepo.create({
-        id: 'USR-ADMIN',
-        email: 'admin@oakridge.edu',
-        password: 'admin',
-        name: 'Dr. Arthur Pendelton',
-        role: UserRole.ADMIN,
-        title: 'Super Administrator',
-        department: 'Administration',
-        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=250&q=80',
-        isActive: true,
-        sessionVersion: 1,
-      });
-      await this.userRepo.save(adminUser);
-      this.logger.log('Master Super Admin provisioned: admin@oakridge.edu');
-    } else {
-      this.logger.log(`Master Admin verified: ${adminExists.email}`);
-    }
-  }
+      await queryRunner.query(`
+        INSERT INTO "users" (
+          "id", "email", "password", "name", "role", "title", "department", "staffId", "avatar", "isActive", "sessionVersion"
+        ) VALUES (
+          'USR-ADMIN',
+          'admin@oakridge.edu',
+          'admin',
+          'Dr. Arthur Pendelton',
+          'admin',
+          'Super Administrator',
+          'Administration',
+          'STF-106',
+          'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=250&q=80',
+          true,
+          1
+        )
+        ON CONFLICT ("email") DO NOTHING;
+      `);
 
-  async ensureSchoolInfo() {
-    const infoCount = await this.schoolInfoRepo.count();
-    if (infoCount === 0) {
-      this.logger.log('Initializing institution profile settings...');
-      await this.schoolInfoRepo.save({
-        id: 1,
-        name: 'Oakridge International Academy',
-        tagline: 'Excellence in Education & Character Building',
-        headerSubtitle: 'CBSE & IB World School #04291',
-        affiliation: 'CBSE & IB World School #04291',
-        logo: '',
-        established: 1998,
-        email: 'contact@oakridge-academy.edu',
-        phone: '+1 (555) 234-5678',
-        address: '742 Evergreen Academic Blvd, Education City, CA 90210',
-        website: 'www.oakridge-academy.edu',
-        currency: '$',
-        academicYear: '2026-2027',
-        principal: 'Dr. Arthur Pendelton, Ph.D.',
-        themeColor: 'indigo',
-      });
+      await queryRunner.release();
+      this.logger.log('Master Admin verification passed (ON CONFLICT DO NOTHING enforced).');
+    } catch (err) {
+      this.logger.warn(`Admin seed check encountered: ${err.message}`);
     }
   }
 
   /**
-   * Reset database endpoint handler:
-   * Clears operational records and retains strictly the singleton Admin user and institution profile.
+   * Idempotent Institution Info: Inserts default school profile if id=1 does not exist.
+   */
+  async ensureSchoolInfo() {
+    try {
+      const queryRunner = this.dataSource.createQueryRunner();
+      await queryRunner.connect();
+
+      await queryRunner.query(`
+        INSERT INTO "school_info" (
+          "id", "name", "tagline", "headerSubtitle", "affiliation", "logo", "established",
+          "email", "phone", "address", "website", "currency", "academicYear", "principal", "themeColor"
+        ) VALUES (
+          1,
+          'Oakridge International Academy',
+          'Excellence in Education & Character Building',
+          'CBSE & IB World School #04291',
+          'CBSE & IB World School #04291',
+          '',
+          1998,
+          'contact@oakridge-academy.edu',
+          '+1 (555) 234-5678',
+          '742 Evergreen Academic Blvd, Education City, CA 90210',
+          'www.oakridge-academy.edu',
+          '$',
+          '2026-2027',
+          'Dr. Arthur Pendelton, Ph.D.',
+          'indigo'
+        )
+        ON CONFLICT ("id") DO NOTHING;
+      `);
+
+      await queryRunner.release();
+      this.logger.log('Institution settings baseline verified.');
+    } catch (err) {
+      this.logger.warn(`School info check encountered: ${err.message}`);
+    }
+  }
+
+  /**
+   * Safe operational reset (called only if explicitly requested by authorized Super Admin via Settings):
    */
   async resetAll() {
-    this.logger.log('Resetting operational database records...');
-    await this.payrollItemRepo.createQueryBuilder().delete().execute();
-    await this.payrollRepo.createQueryBuilder().delete().execute();
-    await this.attendanceRepo.createQueryBuilder().delete().execute();
-    await this.leaveRepo.createQueryBuilder().delete().execute();
-    await this.activityRepo.createQueryBuilder().delete().execute();
-    await this.classRepo.createQueryBuilder().delete().execute();
-    await this.studentRepo.createQueryBuilder().delete().execute();
-    await this.notifRepo.createQueryBuilder().delete().execute();
+    this.logger.log('Performing authorized administrative database reset...');
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    // Clear staff and non-admin users
-    await this.staffRepo.createQueryBuilder().delete().execute();
-    await this.userRepo.createQueryBuilder().delete().where('role != :adminRole', { adminRole: UserRole.ADMIN }).execute();
+    try {
+      await queryRunner.query(`DELETE FROM "staff_payroll_records"`);
+      await queryRunner.query(`DELETE FROM "monthly_payrolls"`);
+      await queryRunner.query(`DELETE FROM "attendance_records"`);
+      await queryRunner.query(`DELETE FROM "leave_requests"`);
+      await queryRunner.query(`DELETE FROM "activities"`);
+      await queryRunner.query(`DELETE FROM "classes"`);
+      await queryRunner.query(`DELETE FROM "students"`);
+      await queryRunner.query(`DELETE FROM "notifications"`);
+      await queryRunner.query(`DELETE FROM "staff"`);
+      await queryRunner.query(`DELETE FROM "users" WHERE "role" != 'admin'`);
 
-    await this.seedAdminUserOnly();
-    await this.ensureSchoolInfo();
+      await queryRunner.commitTransaction();
+      await queryRunner.release();
 
-    this.logger.log('Database reset complete: empty operational state with admin user retained.');
+      await this.seedAdminUserOnly();
+      await this.ensureSchoolInfo();
+
+      this.logger.log('Operational reset completed safely with admin retained.');
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      await queryRunner.release();
+      throw err;
+    }
   }
 }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Users, DollarSign, Calendar, Briefcase, Sparkles, Building, User, ShieldCheck, Eye, EyeOff, Lock } from 'lucide-react';
+import { X, Users, DollarSign, Calendar, Briefcase, Sparkles, Building, User, ShieldCheck, Eye, EyeOff, Lock, ShieldAlert } from 'lucide-react';
 import { useSchool } from '../../context/SchoolContext';
 import { ImageUploader } from '../Common/ImageUploader';
 
@@ -14,6 +14,7 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
     const low = r.toLowerCase().trim();
     if (low === 'principal') return 'principal';
     if (low === 'accountant') return 'accountant';
+    if (low === 'support_staff' || low === 'support' || low === 'support staff' || low === 'non-teaching') return 'support_staff';
     return 'teacher';
   };
 
@@ -49,20 +50,23 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
     }
   });
 
+  const isSupportStaff = formData.role === 'support_staff';
+
   useEffect(() => {
     if (staffToEdit) {
+      const normRole = normalizeRole(staffToEdit.role);
       setFormData({
         ...staffToEdit,
         password: '',
-        role: normalizeRole(staffToEdit.role),
-        designation: staffToEdit.designation || (staffToEdit.role && !['teacher', 'principal', 'accountant', 'admin'].includes(staffToEdit.role.toLowerCase()) ? staffToEdit.role : ''),
+        role: normRole,
+        designation: staffToEdit.designation || (staffToEdit.role && !['teacher', 'principal', 'accountant', 'admin', 'support_staff'].includes(staffToEdit.role.toLowerCase()) ? staffToEdit.role : ''),
         salary: {
-          baseSalary: staffToEdit.salary?.baseSalary || 5000,
-          hra: staffToEdit.salary?.hra || 1100,
-          transportAllowance: staffToEdit.salary?.transportAllowance || 350,
-          specialAllowance: staffToEdit.salary?.specialAllowance || 250,
-          pfDeduction: staffToEdit.salary?.pfDeduction || 320,
-          taxDeduction: staffToEdit.salary?.taxDeduction || 420,
+          baseSalary: staffToEdit.salary?.baseSalary || (normRole === 'support_staff' ? 2500 : 5000),
+          hra: staffToEdit.salary?.hra || (normRole === 'support_staff' ? 500 : 1100),
+          transportAllowance: staffToEdit.salary?.transportAllowance || (normRole === 'support_staff' ? 200 : 350),
+          specialAllowance: staffToEdit.salary?.specialAllowance || (normRole === 'support_staff' ? 100 : 250),
+          pfDeduction: staffToEdit.salary?.pfDeduction || (normRole === 'support_staff' ? 150 : 320),
+          taxDeduction: staffToEdit.salary?.taxDeduction || (normRole === 'support_staff' ? 50 : 420),
           bankName: staffToEdit.salary?.bankName || 'Chase National Bank',
           accountNumber: staffToEdit.salary?.accountNumber || '•••• 1234',
           taxId: staffToEdit.salary?.taxId || 'TAX-US-99000'
@@ -107,7 +111,26 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData(prev => {
+      const updated = { ...prev, [name]: value };
+      // If switched to support_staff, auto adjust defaults
+      if (name === 'role' && value === 'support_staff' && !staffToEdit) {
+        if (prev.department === 'Science') updated.department = 'Support & Facilities';
+        if (!prev.designation) updated.designation = 'Head Peon';
+        if (prev.salary.baseSalary === 5000) {
+          updated.salary = {
+            ...prev.salary,
+            baseSalary: 2500,
+            hra: 500,
+            transportAllowance: 200,
+            specialAllowance: 100,
+            pfDeduction: 150,
+            taxDeduction: 50
+          };
+        }
+      }
+      return updated;
+    });
   };
 
   const handleSalaryChange = (e) => {
@@ -128,18 +151,20 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
       return;
     }
     if (!formData.email.trim()) {
-      showToast('Please provide a valid work email address.', 'error');
+      showToast('Please provide an email or unique identifier.', 'error');
       return;
     }
-    if (!staffToEdit && !formData.password?.trim()) {
-      showToast('Please set an initial security password.', 'error');
+
+    // Password required ONLY when creating staff with active portal roles (not support staff)
+    if (!staffToEdit && !isSupportStaff && !formData.password?.trim()) {
+      showToast('Please set an initial security password for portal login.', 'error');
       return;
     }
 
     const payload = {
       ...formData,
       role: normalizeRole(formData.role),
-      designation: formData.designation.trim() || `${formData.role.charAt(0).toUpperCase() + formData.role.slice(1)} - ${formData.department}`,
+      designation: formData.designation.trim() || (isSupportStaff ? 'Support Staff' : `${formData.role.charAt(0).toUpperCase() + formData.role.slice(1)} - ${formData.department}`),
       experienceYears: Number(formData.experienceYears) || 0,
     };
 
@@ -158,7 +183,8 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
   const departments = [
     'Science', 'Mathematics', 'Computer Science', 'Humanities',
     'Languages', 'Physical Education', 'Fine Arts', 'Administration',
-    'Finance', 'Student Counseling', 'Library & Resource'
+    'Finance', 'Student Counseling', 'Library & Resource',
+    'Support & Facilities', 'Housekeeping & Maintenance', 'Transport & Logistics', 'Campus Security', 'Cafeteria & Dining'
   ];
 
   // Live salary gross & net computation preview
@@ -189,7 +215,7 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
                 {staffToEdit ? 'Edit Faculty / Staff Member' : 'Staff Onboarding & Compensation Form'}
               </h3>
               <p className="text-xs text-slate-500">
-                Register employment profile, designation, joining dates, department, and salary breakdown
+                Register faculty, administration, or helping staff profiles, designations, joining dates, and wages
               </p>
             </div>
           </div>
@@ -258,7 +284,7 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
                     type="text"
                     name="firstName"
                     required
-                    placeholder="e.g. Marcus"
+                    placeholder="e.g. Marcus / Ramesh"
                     value={formData.firstName}
                     onChange={handleChange}
                     className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
@@ -273,7 +299,7 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
                     type="text"
                     name="lastName"
                     required
-                    placeholder="e.g. Vance"
+                    placeholder="e.g. Vance / Kumar"
                     value={formData.lastName}
                     onChange={handleChange}
                     className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
@@ -284,13 +310,13 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Work Email *
+                    Email Address / ID *
                   </label>
                   <input
                     type="email"
                     name="email"
                     required
-                    placeholder="faculty@oakridge-academy.edu"
+                    placeholder="staff@oakridge-academy.edu"
                     value={formData.email}
                     onChange={handleChange}
                     className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
@@ -313,35 +339,47 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
                 </div>
               </div>
 
-              {/* Password field: visible only when creating new staff, never on edit */}
+              {/* Password field / Support Staff Notice */}
               {!staffToEdit && (
-                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl">
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-slate-800">
-                      <Lock className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Account Security Password *</span>
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-normal">Initial portal login password</span>
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      name="password"
-                      required
-                      placeholder="Set initial security password for staff portal"
-                      value={formData.password}
-                      onChange={handleChange}
-                      className="w-full pl-3 pr-10 py-2 text-sm bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none text-slate-800 font-medium"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
+                isSupportStaff ? (
+                  <div className="p-3.5 bg-amber-50/80 border border-amber-200 rounded-2xl flex items-start gap-3">
+                    <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <div className="text-xs font-bold text-amber-900">No Portal Login Access Required</div>
+                      <div className="text-[11px] text-amber-700 mt-0.5">
+                        Support staff (Peons, Cleaning Staff, Security, Drivers) are managed administratively for daily roll call, salary payouts, and leaves without creating application user login accounts.
+                      </div>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl">
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 text-slate-800">
+                        <Lock className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Account Security Password *</span>
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-normal">Initial portal login password</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        name="password"
+                        required={!isSupportStaff}
+                        placeholder="Set initial security password for staff portal"
+                        value={formData.password}
+                        onChange={handleChange}
+                        className="w-full pl-3 pr-10 py-2 text-sm bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none text-slate-800 font-medium"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                )
               )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -405,14 +443,14 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
             <div className="space-y-4 animate-fade-in">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 
-                {/* Role / Designation Dropdown: PRINCIPAL | TEACHER | ACCOUNTANT */}
+                {/* Role Dropdown */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
                     <span className="flex items-center gap-1">
                       <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Role (RBAC System Access) *</span>
+                      <span>Role Category *</span>
                     </span>
-                    <span className="text-[10px] text-slate-400 font-normal">Admin is unique master</span>
+                    <span className="text-[10px] text-slate-400 font-normal">Select Staff Type</span>
                   </label>
                   <select
                     name="role"
@@ -421,9 +459,10 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
                     onChange={handleChange}
                     className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white font-bold text-slate-800"
                   >
-                    <option value="principal">PRINCIPAL</option>
-                    <option value="teacher">TEACHER</option>
-                    <option value="accountant">ACCOUNTANT</option>
+                    <option value="teacher">TEACHER (Classroom & Roll Call Access)</option>
+                    <option value="principal">PRINCIPAL (Executive Academic Access)</option>
+                    <option value="accountant">ACCOUNTANT (Finance & Payroll Access)</option>
+                    <option value="support_staff">SUPPORT STAFF (Peons, Cleaning, Transport, Security - No Login)</option>
                   </select>
                 </div>
 
@@ -436,7 +475,7 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
                     type="text"
                     name="designation"
                     required
-                    placeholder="e.g. Senior Physics Teacher & HOD"
+                    placeholder={isSupportStaff ? "e.g. Head Peon / Cleaning Staff / Bus Driver" : "e.g. Senior Physics Teacher & HOD"}
                     value={formData.designation}
                     onChange={handleChange}
                     className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none text-slate-800 font-medium"
@@ -515,28 +554,28 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Academic Qualifications
+                    {isSupportStaff ? 'Skills / Certifications' : 'Academic Qualifications'}
                   </label>
                   <input
                     type="text"
                     name="qualification"
                     value={formData.qualification}
                     onChange={handleChange}
-                    placeholder="e.g. Ph.D. Applied Physics, B.Ed."
+                    placeholder={isSupportStaff ? "e.g. Commercial Driving License / Security Cert." : "e.g. Ph.D. Applied Physics, B.Ed."}
                     className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                   />
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Primary Subject / Responsibilities
+                    {isSupportStaff ? 'Assigned Area / Shift' : 'Primary Subject / Responsibilities'}
                   </label>
                   <input
                     type="text"
                     name="subject"
                     value={formData.subject}
                     onChange={handleChange}
-                    placeholder="e.g. AP Calculus & Grade 11 Math"
+                    placeholder={isSupportStaff ? "e.g. Main Admin Building & Campus Gate 1" : "e.g. AP Calculus & Grade 11 Math"}
                     className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                   />
                 </div>
@@ -599,7 +638,7 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Special / Subject Allowance
+                      Special / Uniform Allowance
                     </label>
                     <input
                       type="number"
@@ -622,7 +661,7 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Provident Fund / Retirement (PF)
+                      Provident Fund (PF) / ESI
                     </label>
                     <input
                       type="number"
@@ -636,7 +675,7 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Estimated Income Tax (Withholding)
+                      Estimated Tax / Other Deductions
                     </label>
                     <input
                       type="number"
@@ -661,21 +700,21 @@ export const StaffEnrollModal = ({ isOpen, onClose, staffToEdit = null }) => {
                     name="bankName"
                     value={formData.salary.bankName}
                     onChange={handleSalaryChange}
-                    placeholder="e.g. Chase Bank"
+                    placeholder="e.g. Chase Bank / Cash"
                     className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                   />
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Account Mask
+                    Account Mask / Method
                   </label>
                   <input
                     type="text"
                     name="accountNumber"
                     value={formData.salary.accountNumber}
                     onChange={handleSalaryChange}
-                    placeholder="•••• 4892"
+                    placeholder="•••• 4892 / Cash Voucher"
                     className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none font-mono"
                   />
                 </div>

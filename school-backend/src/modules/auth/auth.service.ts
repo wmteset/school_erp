@@ -219,6 +219,9 @@ export class AuthService implements OnApplicationBootstrap {
       if (!user) {
         const staffMember = await this.staffRepo.findOne({ where: { email } });
         if (staffMember) {
+          if (staffMember.role?.toLowerCase() === 'support_staff' || staffMember.role?.toLowerCase() === 'support') {
+            throw new UnauthorizedException('Support staff do not have portal login access. Please contact administration.');
+          }
           const mappedRole = this.normalizeRole(staffMember.role);
           user = this.userRepo.create({
             id: `USR-${staffMember.id}`,
@@ -375,6 +378,9 @@ export class AuthService implements OnApplicationBootstrap {
     } else {
       const staffMember = await this.staffRepo.findOne({ where: { email } });
       if (staffMember) {
+        if (staffMember.role?.toLowerCase() === 'support_staff' || staffMember.role?.toLowerCase() === 'support') {
+          throw new UnauthorizedException('Support staff accounts do not have portal login access or password recovery.');
+        }
         recipientName = `${staffMember.firstName} ${staffMember.lastName}`;
       } else {
         throw new NotFoundException('No registered account found with this email address.');
@@ -466,6 +472,9 @@ export class AuthService implements OnApplicationBootstrap {
     if (!user) {
       const staffMember = await this.staffRepo.findOne({ where: { email } });
       if (staffMember) {
+        if (staffMember.role?.toLowerCase() === 'support_staff' || staffMember.role?.toLowerCase() === 'support') {
+          throw new UnauthorizedException('Support staff accounts do not have portal login access.');
+        }
         const mappedRole = this.normalizeRole(staffMember.role);
         user = this.userRepo.create({
           id: `USR-${staffMember.id}`,
